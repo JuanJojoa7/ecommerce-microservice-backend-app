@@ -1,0 +1,58 @@
+pipeline {
+  agent any
+  options { timestamps(); buildDiscarder(logRotator(numToKeepStr: '20')); }
+  parameters {
+    string(name: 'ENV', defaultValue: 'dev', description: 'Environment: dev|stage|master')
+  }
+  environment {
+    JAVA_HOME = tool name: 'jdk11', type: 'hudson.model.JDK'
+    PATH = "$JAVA_HOME/bin:$PATH"
+    GATEWAY_BASE_URL = 'http://localhost:8080'
+  }
+  stages {
+    stage('Checkout') {
+      steps { checkout scm }
+    }
+    stage('Setup') {
+      steps {
+        sh label: 'Maven Version', script: 'mvn -v'
+      }
+    }
+    stage('Build & Unit Tests') {
+      steps { sh 'mvn -q -B -DskipITs=true -DskipIT=true -Dskip.e2e=true clean package' }
+      post { always { junit '**/target/surefire-reports/*.xml' } }
+    }
+    stage('Docker Build') {
+      when { expression { params.ENV != 'dev' || env.CHANGE_TARGET == 'stage' } }
+      steps { echo 'Docker build skipped in template; service pipelines build images per-module.' }
+    }
+    stage('Deploy to Kubernetes') {
+      when { expression { params.ENV != 'dev' } }
+      steps { echo 'Apply k8s manifests here with kubectl apply -n appropriate namespace' }
+    }
+    stage('E2E Tests') {
+      when { expression { params.ENV != 'dev' } }
+      steps {
+        sh 'mvn -q -pl e2e-tests -am -DskipTests=false test'
+        publishHTML(target: [allowMissing: true, keepAll: true, reportDir: 'performance', reportFiles: 'locust-report.html', reportName: 'Locust Report'])
+      }
+    }
+    stage('System Tests (Docker Compose)') {
+      when { expression { params.ENV != 'dev' } }
+      steps {
+        sh 'mvn -q -pl system-tests -am -DskipITs=false verify'
+      }
+    }
+    stage('Performance (Locust)') {
+      when { expression { params.ENV == 'stage' || params.ENV == 'master' } }
+      steps { echo 'Run locust in headless mode from Jenkins agent if available.' }
+    }
+    stage('Release Notes') {
+      when { expression { params.ENV == 'master' } }
+      steps {
+        sh 'bash scripts/generate-release-notes.sh'
+        archiveArtifacts artifacts: 'release-notes-*.md', fingerprint: true
+      }
+    }
+  }
+}

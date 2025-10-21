@@ -1,0 +1,1 @@
+This folder documents how GitHub Actions already exists in the repo. For the workshop, Jenkinsfiles are added under each service and a shared Jenkinsfile template at `.jenkins/Jenkinsfile.shared`. Configure Jenkins multibranch pipelines pointing to each service folder.

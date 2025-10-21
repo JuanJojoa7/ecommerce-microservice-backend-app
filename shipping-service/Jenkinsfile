@@ -1,0 +1,10 @@
+pipeline {
+  agent any
+  stages {
+    stage('Build & Unit Tests (dev)') { steps { sh 'mvn -q -pl shipping-service -am clean package' } }
+    stage('Docker Build') { steps { sh 'docker build -f shipping-service/Dockerfile --build-arg PROJECT_VERSION=0.1.0 -t shipping-service:0.1.0 .' } }
+    stage('Deploy to K8s (stage)') { when { branch 'stage' } steps { echo 'kubectl apply -n ecommerce-stage -f k8s/stage/shipping-service.yaml' } }
+    stage('E2E on Stage') { when { branch 'stage' } steps { sh 'mvn -q -pl e2e-tests -am test' } }
+    stage('Deploy to K8s (master)') { when { branch 'master' } steps { echo 'kubectl apply -n ecommerce-prod -f k8s/prod/shipping-service.yaml' } }
+  }
+}

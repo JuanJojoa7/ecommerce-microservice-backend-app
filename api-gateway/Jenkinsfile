@@ -1,0 +1,13 @@
+@Library('pipeline-shared') _
+
+pipeline {
+  agent any
+  environment { PROJECT_VERSION = '0.1.0' }
+  stages {
+    stage('Build & Test (dev)') { steps { sh 'mvn -q -pl api-gateway -am clean package' } }
+    stage('Docker Build') { steps { sh 'docker build -f api-gateway/Dockerfile --build-arg PROJECT_VERSION=0.1.0 -t api-gateway:0.1.0 .' } }
+    stage('Deploy to K8s (stage)') { when { branch 'stage' } steps { echo 'kubectl apply -n ecommerce-stage -f k8s/stage/api-gateway.yaml' } }
+    stage('E2E on Stage') { when { branch 'stage' } steps { sh 'mvn -q -pl e2e-tests -am test' } }
+    stage('Master Release') { when { branch 'master' } steps { echo 'kubectl apply -n ecommerce-prod -f k8s/prod/api-gateway.yaml' } }
+  }
+}
