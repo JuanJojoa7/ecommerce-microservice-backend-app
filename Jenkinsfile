@@ -4,7 +4,7 @@ pipeline {
     REGISTRY = 'localhost:5000'
     NAMESPACE = 'ecommerce'
     DOCKER_BUILDKIT = '1'
-    JAVA_HOME = '/usr/local/openjdk-17'
+    JAVA_HOME = '/opt/java/openjdk'
     PATH = "$JAVA_HOME/bin:$PATH" 
   }
   options {
