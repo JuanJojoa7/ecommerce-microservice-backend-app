@@ -17,6 +17,20 @@ pipeline {
         checkout scm
       }
     }
+    stage('Setup kubectl') {
+      steps {
+        sh '''
+          set -e
+          mkdir -p "$WORKSPACE/bin"
+          if ! "$WORKSPACE/bin/kubectl" version --client >/dev/null 2>&1; then
+            echo "Installing kubectl locally in $WORKSPACE/bin"
+            curl -sL -o "$WORKSPACE/bin/kubectl" "https://storage.googleapis.com/kubernetes-release/release/$(curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt)/bin/linux/amd64/kubectl"
+            chmod +x "$WORKSPACE/bin/kubectl"
+          fi
+          "$WORKSPACE/bin/kubectl" version --client
+        '''
+      }
+    }
     stage('Build & Test') {
       steps {
         sh 'chmod +x mvnw'
@@ -83,6 +97,9 @@ pipeline {
       }
     }
     stage('Deploy Infra') {
+      environment {
+        PATH = "${env.WORKSPACE}/bin:${env.PATH}"
+      }
       steps {
         sh """
           kubectl apply -f k8s/infra/namespace.yaml
@@ -91,6 +108,9 @@ pipeline {
       }
     }
     stage('Deploy Services') {
+      environment {
+        PATH = "${env.WORKSPACE}/bin:${env.PATH}"
+      }
       steps {
         sh """
           kubectl -n ${NAMESPACE} apply -f k8s/services/
