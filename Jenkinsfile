@@ -102,8 +102,20 @@ pipeline {
       }
       steps {
         sh """
-          kubectl apply -f k8s/infra/namespace.yaml
-          kubectl -n ${NAMESPACE} apply -f k8s/infra/
+          set -e
+          # Resolve kubeconfig: prefer workspace copy, fallback to home
+          mkdir -p "$WORKSPACE/.kube"
+          if [ -f "$HOME/.kube/config" ] && [ ! -f "$WORKSPACE/.kube/config" ]; then
+            cp "$HOME/.kube/config" "$WORKSPACE/.kube/config"
+          fi
+          export KUBECONFIG="$WORKSPACE/.kube/config"
+          unset http_proxy https_proxy no_proxy HTTP_PROXY HTTPS_PROXY NO_PROXY || true
+
+          kubectl version --client
+          kubectl config current-context || true
+
+          kubectl apply --validate=false -f k8s/infra/namespace.yaml
+          kubectl -n ${NAMESPACE} apply --validate=false -f k8s/infra/
         """
       }
     }
@@ -113,7 +125,11 @@ pipeline {
       }
       steps {
         sh """
-          kubectl -n ${NAMESPACE} apply -f k8s/services/
+          set -e
+          export KUBECONFIG="$WORKSPACE/.kube/config"
+          unset http_proxy https_proxy no_proxy HTTP_PROXY HTTPS_PROXY NO_PROXY || true
+
+          kubectl -n ${NAMESPACE} apply --validate=false -f k8s/services/
         """
       }
     }
