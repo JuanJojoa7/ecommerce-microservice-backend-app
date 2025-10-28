@@ -103,16 +103,23 @@ pipeline {
       steps {
         sh """
           set -e
-          # Resolve kubeconfig: prefer workspace copy, fallback to home
-          mkdir -p "$WORKSPACE/.kube"
-          if [ -f "$HOME/.kube/config" ] && [ ! -f "$WORKSPACE/.kube/config" ]; then
-            cp "$HOME/.kube/config" "$WORKSPACE/.kube/config"
+          # Detect kubeconfig without overwriting user's file
+          KCFG=""
+          for C in "/var/jenkins_home/.kube/config" "/home/jenkins/.kube/config" "$WORKSPACE/.kube/config"; do
+            if [ -f "$C" ]; then KCFG="$C"; break; fi
+          done
+          if [ -z "$KCFG" ]; then
+            echo "ERROR: kubeconfig not found. Place your kubeconfig at /var/jenkins_home/.kube/config (recommended) or $WORKSPACE/.kube/config" >&2
+            exit 1
           fi
-          export KUBECONFIG="$WORKSPACE/.kube/config"
+          export KUBECONFIG="$KCFG"
           unset http_proxy https_proxy no_proxy HTTP_PROXY HTTPS_PROXY NO_PROXY || true
 
           kubectl version --client
-          kubectl config current-context || true
+          if ! kubectl config current-context >/dev/null 2>&1; then
+            echo "ERROR: kubectl has no current-context set in $KUBECONFIG" >&2
+            exit 1
+          fi
 
           kubectl apply --validate=false -f k8s/infra/namespace.yaml
           kubectl -n ${NAMESPACE} apply --validate=false -f k8s/infra/
@@ -126,7 +133,16 @@ pipeline {
       steps {
         sh """
           set -e
-          export KUBECONFIG="$WORKSPACE/.kube/config"
+          # Reuse kubeconfig detection
+          KCFG=""
+          for C in "/var/jenkins_home/.kube/config" "/home/jenkins/.kube/config" "$WORKSPACE/.kube/config"; do
+            if [ -f "$C" ]; then KCFG="$C"; break; fi
+          done
+          if [ -z "$KCFG" ]; then
+            echo "ERROR: kubeconfig not found. Place your kubeconfig at /var/jenkins_home/.kube/config (recommended) or $WORKSPACE/.kube/config" >&2
+            exit 1
+          fi
+          export KUBECONFIG="$KCFG"
           unset http_proxy https_proxy no_proxy HTTP_PROXY HTTPS_PROXY NO_PROXY || true
 
           kubectl -n ${NAMESPACE} apply --validate=false -f k8s/services/
