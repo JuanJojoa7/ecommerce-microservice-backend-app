@@ -59,7 +59,8 @@ pipeline {
               docker build \
                 -t ${REGISTRY}/ecommerce/${svc}:latest \
                 -t ${REGISTRY}/ecommerce/${svc}:${sha} \
-                ./${svc}
+                --file ./${svc}/Dockerfile \
+                .
             """
           }
           sh 'docker images | head -n 50'
