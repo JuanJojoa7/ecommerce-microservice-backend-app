@@ -1,158 +1,103 @@
 pipeline {
-  agent any
-  environment {
-    REGISTRY = 'localhost:5000'
-    NAMESPACE = 'ecommerce'
-    DOCKER_BUILDKIT = '1'
-    JAVA_HOME = '/opt/java/openjdk'
-    PATH = "$JAVA_HOME/bin:$PATH" 
-  }
-  options {
-    skipDefaultCheckout(true)
-    timestamps()
-  }
-  stages {
-    stage('Checkout') {
-      steps {
-        checkout scm
-      }
+    agent {
+        kubernetes {
+            yaml '''
+apiVersion: v1
+kind: Pod
+spec:
+  containers:
+  - name: maven
+    image: maven:3.8.6-jdk-17
+    command:
+    - cat
+    tty: true
+  - name: docker
+    image: docker:dind
+    securityContext:
+      privileged: true
+    command:
+    - dockerd
+    tty: true
+  - name: kubectl
+    image: bitnami/kubectl:latest
+    command:
+    - cat
+    tty: true
+'''
+        }
     }
-    stage('Setup kubectl') {
-      steps {
-        sh '''
-          set -e
-          mkdir -p "$WORKSPACE/bin"
-          if ! "$WORKSPACE/bin/kubectl" version --client >/dev/null 2>&1; then
-            echo "Installing kubectl locally in $WORKSPACE/bin"
-            curl -sL -o "$WORKSPACE/bin/kubectl" "https://storage.googleapis.com/kubernetes-release/release/$(curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt)/bin/linux/amd64/kubectl"
-            chmod +x "$WORKSPACE/bin/kubectl"
-          fi
-          "$WORKSPACE/bin/kubectl" version --client
-        '''
-      }
+
+    environment {
+        DOCKER_REGISTRY = 'your-registry.com'
     }
-    stage('Build & Test') {
-      steps {
-        sh 'chmod +x mvnw'
-        sh './mvnw -B -DskipTests=false test'
-      }
-      post {
+
+    stages {
+        stage('Checkout') {
+            steps {
+                git branch: 'master', url: 'https://github.com/JMMA86/ecommerce-microservice-backend-app.git'
+            }
+        }
+
+        stage('Build with Maven') {
+            steps {
+                container('maven') {
+                    script {
+                        def services = ['favourite-service', 'order-service', 'payment-service', 'product-service', 'service-discovery', 'shipping-service', 'user-service']
+                        services.each { service ->
+                            dir(service) {
+                                sh 'mvn clean package -DskipTests'
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('Run Tests') {
+            steps {
+                container('maven') {
+                    script {
+                        def services = ['favourite-service', 'order-service', 'payment-service', 'product-service', 'service-discovery', 'shipping-service', 'user-service']
+                        services.each { service ->
+                            dir(service) {
+                                sh 'mvn test'
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('Build Docker Images') {
+            steps {
+                container('docker') {
+                    script {
+                        def services = ['favourite-service', 'order-service', 'payment-service', 'product-service', 'service-discovery', 'shipping-service', 'user-service']
+                        services.each { service ->
+                            sh "docker build -t ${DOCKER_REGISTRY}/ecommerce/${service}:latest ./${service}"
+                            sh "docker push ${DOCKER_REGISTRY}/ecommerce/${service}:latest"
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('Deploy to Kubernetes') {
+            steps {
+                container('kubectl') {
+                    sh 'kubectl apply -f k8s/namespace.yml'
+                    sh 'kubectl apply -f k8s/configmap.yml'
+                    sh 'kubectl apply -f k8s/'
+                }
+            }
+        }
+    }
+
+    post {
         always {
-          junit allowEmptyResults: true, testResults: '**/target/surefire-reports/*.xml'
+            container('docker') {
+                sh 'docker system prune -f'
+            }
         }
-      }
     }
-    stage('Package') {
-      steps {
-        sh './mvnw -B -DskipTests package'
-      }
-      post {
-        success {
-          archiveArtifacts artifacts: '**/target/*.jar', fingerprint: true, onlyIfSuccessful: true
-        }
-      }
-    }
-    stage('Build Images') {
-      steps {
-        script {
-          def services = [
-            'cloud-config',
-            'service-discovery',
-            'api-gateway',
-            'proxy-client',
-            'user-service',
-            'product-service',
-            'order-service',
-            'payment-service',
-            'shipping-service',
-            'favourite-service'
-          ]
-          def sha = sh(returnStdout: true, script: 'git rev-parse --short HEAD').trim()
-          services.each { svc ->
-            sh """
-              docker build \
-                -t ${REGISTRY}/ecommerce/${svc}:latest \
-                -t ${REGISTRY}/ecommerce/${svc}:${sha} \
-                --file ./${svc}/Dockerfile \
-                .
-            """
-          }
-          sh 'docker images | head -n 50'
-        }
-      }
-    }
-    stage('Push Images') {
-      steps {
-        script {
-          def services = [
-            'cloud-config','service-discovery','api-gateway','proxy-client',
-            'user-service','product-service','order-service','payment-service','shipping-service','favourite-service'
-          ]
-          def sha = sh(returnStdout: true, script: 'git rev-parse --short HEAD').trim()
-          services.each { svc ->
-            sh "docker push ${REGISTRY}/ecommerce/${svc}:latest"
-            sh "docker push ${REGISTRY}/ecommerce/${svc}:${sha}"
-          }
-        }
-      }
-    }
-    stage('Deploy Infra') {
-      environment {
-        PATH = "${env.WORKSPACE}/bin:${env.PATH}"
-      }
-      steps {
-        sh """
-          set -e
-          # Detect kubeconfig without overwriting user's file
-          KCFG=""
-          for C in "/var/jenkins_home/.kube/config" "/home/jenkins/.kube/config" "$WORKSPACE/.kube/config"; do
-            if [ -f "$C" ]; then KCFG="$C"; break; fi
-          done
-          if [ -z "$KCFG" ]; then
-            echo "ERROR: kubeconfig not found. Place your kubeconfig at /var/jenkins_home/.kube/config (recommended) or $WORKSPACE/.kube/config" >&2
-            exit 1
-          fi
-          export KUBECONFIG="$KCFG"
-          unset http_proxy https_proxy no_proxy HTTP_PROXY HTTPS_PROXY NO_PROXY || true
-
-          kubectl version --client
-          if ! kubectl config current-context >/dev/null 2>&1; then
-            echo "ERROR: kubectl has no current-context set in $KUBECONFIG" >&2
-            exit 1
-          fi
-
-          kubectl apply --validate=false -f k8s/infra/namespace.yaml
-          kubectl -n ${NAMESPACE} apply --validate=false -f k8s/infra/
-        """
-      }
-    }
-    stage('Deploy Services') {
-      environment {
-        PATH = "${env.WORKSPACE}/bin:${env.PATH}"
-      }
-      steps {
-        sh """
-          set -e
-          # Reuse kubeconfig detection
-          KCFG=""
-          for C in "/var/jenkins_home/.kube/config" "/home/jenkins/.kube/config" "$WORKSPACE/.kube/config"; do
-            if [ -f "$C" ]; then KCFG="$C"; break; fi
-          done
-          if [ -z "$KCFG" ]; then
-            echo "ERROR: kubeconfig not found. Place your kubeconfig at /var/jenkins_home/.kube/config (recommended) or $WORKSPACE/.kube/config" >&2
-            exit 1
-          fi
-          export KUBECONFIG="$KCFG"
-          unset http_proxy https_proxy no_proxy HTTP_PROXY HTTPS_PROXY NO_PROXY || true
-
-          kubectl -n ${NAMESPACE} apply --validate=false -f k8s/services/
-        """
-      }
-    }
-  }
-  post {
-    always {
-      cleanWs()
-    }
-  }
 }
