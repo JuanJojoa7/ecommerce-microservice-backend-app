@@ -5,9 +5,10 @@ pipeline {
 apiVersion: v1
 kind: Pod
 spec:
+  serviceAccountName: jenkins-sa
   containers:
   - name: maven
-    image: maven:3.8.6-jdk-17
+    image: maven:3.9.6-eclipse-temurin-17
     command:
     - cat
     tty: true
@@ -17,11 +18,6 @@ spec:
       privileged: true
     command:
     - dockerd
-    tty: true
-  - name: kubectl
-    image: bitnami/kubectl:latest
-    command:
-    - cat
     tty: true
 '''
         }
@@ -34,7 +30,7 @@ spec:
     stages {
         stage('Checkout') {
             steps {
-                git branch: 'master', url: ''
+                git branch: 'master', url: 'https://github.com/JMMA86/ecommerce-microservice-backend-app.git'
             }
         }
 
@@ -68,26 +64,14 @@ spec:
             }
         }
 
-        stage('Build Docker Images') {
-            steps {
-                container('docker') {
-                    script {
-                        def services = ['favourite-service', 'order-service', 'payment-service', 'product-service', 'service-discovery', 'shipping-service', 'user-service']
-                        services.each { service ->
-                            sh "docker build -t ${DOCKER_REGISTRY}/ecommerce/${service}:latest ./${service}"
-                            sh "docker push ${DOCKER_REGISTRY}/ecommerce/${service}:latest"
-                        }
-                    }
-                }
-            }
-        }
-
         stage('Deploy to Kubernetes') {
             steps {
-                container('kubectl') {
-                    sh 'kubectl apply -f k8s/namespace.yml'
-                    sh 'kubectl apply -f k8s/configmap.yml'
-                    sh 'kubectl apply -f k8s/'
+                container('maven') {
+                    sh '''
+                        curl -LO https://storage.googleapis.com/kubernetes-release/release/$(curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt)/bin/linux/amd64/kubectl
+                        chmod +x kubectl
+                        ./kubectl apply -k k8s/overlays/dev/
+                    '''
                 }
             }
         }
