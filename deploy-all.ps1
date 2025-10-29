@@ -1,5 +1,42 @@
 Write-Host "Iniciando flujo completo de despliegue..."
 
+# Paso 0: Crear namespace y Service Account para Jenkins
+Write-Host "Configurando namespace y permisos de Jenkins..."
+kubectl create namespace ecommerce --dry-run=client -o yaml | kubectl apply -f -
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "Error creando namespace ecommerce"
+    exit 1
+}
+
+# Crear Service Account para Jenkins
+$jenkinsSaYaml = @"
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: jenkins-sa
+  namespace: ecommerce
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: jenkins-sa-cluster-admin
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cluster-admin
+subjects:
+- kind: ServiceAccount
+  name: jenkins-sa
+  namespace: ecommerce
+"@
+
+$jenkinsSaYaml | kubectl apply -f -
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "Error creando Service Account y permisos para Jenkins"
+    exit 1
+}
+Write-Host "Service Account jenkins-sa creado exitosamente."
+
 # Paso 1: Construir el proyecto con Maven
 Write-Host "Construyendo proyecto con Maven..."
 mvn clean package -DskipTests
