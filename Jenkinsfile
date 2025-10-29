@@ -42,7 +42,7 @@ spec:
     stages {
         stage('Checkout') {
             steps {
-                git branch: 'master', url: 'https://github.com/JMMA86/ecommerce-microservice-backend-app.git'
+                git branch: 'master', url: 'https://github.com/JuanJojoa7/ecommerce-microservice-backend-app.git'
             }
         }
 
