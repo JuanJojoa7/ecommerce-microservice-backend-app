@@ -104,25 +104,87 @@ spec:
             }
         }
 
-        stage('Run E2E Tests') {
-            steps {
-                container('node') {
-                    sh 'apt-get update && apt-get install -y libgtk2.0-0 libgtk-3-0 libgbm-dev libnotify-dev libgconf-2-4 libnss3-dev libxss1 libasound2-dev libxtst6 xauth xvfb'
-                    sh 'sleep 60'  // Wait for services to be ready
-                    dir('e2e-tests') {
-                        sh 'npm install'
-                        sh 'xvfb-run -a npm test'
-                    }
+                stage('Run E2E Tests') {
+                        steps {
+                                // Run services with Docker Compose inside the docker:dind container and execute Cypress in a container sharing the host network
+                                container('docker') {
+                                        script {
+                                                sh '''
+                                                    set -euxo pipefail
+                                                    echo "Docker version:" && docker version
+                                                    # Prefer docker compose plugin; fallback to docker-compose if needed
+                                                    if docker compose version >/dev/null 2>&1; then
+                                                        COMPOSE="docker compose"
+                                                    elif command -v docker-compose >/dev/null 2>&1; then
+                                                        COMPOSE="docker-compose"
+                                                    else
+                                                        echo "Docker Compose is not available" >&2
+                                                        exit 1
+                                                    fi
+
+                                                    # Build and start the entire stack (core + services) as one compose project
+                                                    $COMPOSE -f core.yml -f compose.yml up -d --build
+
+                                                    # Helper to wait for an HTTP endpoint to be ready via the dind host network
+                                                    wait_for() {
+                                                        local url="$1"; local name="$2"; local retries="${3:-60}"; local delay="${4:-5}";
+                                                        echo "Waiting for ${name} at ${url} ..."
+                                                        for i in $(seq 1 "$retries"); do
+                                                            if docker run --rm --network=host curlimages/curl:8.10.1 -sSf -o /dev/null "$url"; then
+                                                                echo "${name} is UP"
+                                                                return 0
+                                                            fi
+                                                            echo "Attempt $i/${retries} not ready yet; sleeping ${delay}s"
+                                                            sleep "$delay"
+                                                        done
+                                                        echo "Timeout waiting for ${name} at ${url}" >&2
+                                                        return 1
+                                                    }
+
+                                                    # Wait for core services first
+                                                    wait_for http://localhost:9296/actuator/health "cloud-config" 60 5
+                                                    wait_for http://localhost:8761/actuator/health "service-discovery (Eureka)" 60 5
+                                                    wait_for http://localhost:9411/health "zipkin" 60 5
+
+                                                    # Then wait for a subset of business services
+                                                    wait_for http://localhost:8700/actuator/health "user-service" 60 5
+                                                    wait_for http://localhost:8500/actuator/health "product-service" 60 5
+                                                    wait_for http://localhost:8300/actuator/health "order-service" 60 5
+                                                    wait_for http://localhost:8400/actuator/health "payment-service" 60 5
+                                                    wait_for http://localhost:8600/actuator/health "shipping-service" 60 5
+                                                    wait_for http://localhost:8800/actuator/health "favourite-service" 60 5
+                                                    wait_for http://localhost:8080/actuator/health "api-gateway" 60 5 || true
+
+                                                    # Run Cypress using the included image, sharing the dind host network so localhost:* works
+                                                    docker run --rm \
+                                                        --network=host \
+                                                        -v "$PWD/e2e-tests":/e2e \
+                                                        -w /e2e \
+                                                        -e CYPRESS_VERIFY_TIMEOUT=180000 \
+                                                        cypress/included:15.5.0
+                                                '''
+                                        }
+                                }
+                        }
                 }
-            }
-        }
     }
 
     post {
         always {
-            container('docker') {
-                sh 'docker system prune -f'
-            }
+                        container('docker') {
+                                // Tear down stack and cleanup space
+                                script {
+                                        sh '''
+                                            set +e
+                                            if docker compose version >/dev/null 2>&1; then
+                                                docker compose -f core.yml -f compose.yml down -v
+                                            elif command -v docker-compose >/dev/null 2>&1; then
+                                                docker-compose -f core.yml -f compose.yml down -v
+                                            fi
+                                            docker system prune -f
+                                        '''
+                                }
+                        }
         }
     }
 }
