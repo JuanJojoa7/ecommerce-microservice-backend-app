@@ -141,10 +141,10 @@ spec:
                                                         *)
                                                             IMG="" ;;
                                                     esac
-                                                    if [ -n "$IMG" ]; then
-                                                        # Replace the first 'image:' occurrence under the container spec
-                                                        sed -i "0,/image:/s//image: ${IMG}/" "$f"
-                                                    fi
+                                                                                if [ -n "$IMG" ]; then
+                                                                                    # Replace the first 'image:' occurrence under the container spec (use # as sed delimiter to avoid issues with / in image)
+                                                                                    sed -i "0,/image:/s##image: ${IMG}#" "$f"
+                                                                                fi
                                                 done
 
                                                 # Apply manifests
