@@ -5,7 +5,8 @@ RUN mkdir -p /home/app
 WORKDIR /home/app
 ENV SPRING_PROFILES_ACTIVE=dev
 COPY . .
-ADD target/api-gateway-v${PROJECT_VERSION}.jar api-gateway.jar
+ARG JAR_FILE=target/*.jar
+COPY ${JAR_FILE} api-gateway.jar
 EXPOSE 8080
 ENTRYPOINT ["java", "-Dspring.profiles.active=${SPRING_PROFILES_ACTIVE}", "-jar", "api-gateway.jar"]
 
