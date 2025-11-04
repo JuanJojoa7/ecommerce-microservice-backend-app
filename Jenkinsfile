@@ -100,23 +100,17 @@ spec:
                         # Prepare namespace
                         kubectl create namespace ecommerce-dev --dry-run=client -o yaml | kubectl apply -f -
 
-                        # Install kompose locally (Linux amd64)
+                        # Install kompose locally (download static binary)
                         KVER="v1.32.0"
-                        curl -sSL -o /tmp/kompose.tar.gz https://github.com/kubernetes/kompose/releases/download/${KVER}/kompose-linux-amd64.tar.gz || true
-                        if [ -f /tmp/kompose.tar.gz ]; then
-                          tar -xz -C /usr/local/bin -f /tmp/kompose.tar.gz kompose
-                        else
-                          # Fallback: direct binary
-                          curl -sSL -o /usr/local/bin/kompose https://github.com/kubernetes/kompose/releases/download/${KVER}/kompose-linux-amd64
-                          chmod +x /usr/local/bin/kompose
-                        fi
-                        kompose version || true
+                        curl -sSL -o /usr/local/bin/kompose "https://github.com/kubernetes/kompose/releases/download/${KVER}/kompose-linux-amd64"
+                        chmod +x /usr/local/bin/kompose
+                        /usr/local/bin/kompose version
 
                         # Generate manifests from docker compose files
                         rm -rf k8s/generated || true
                         mkdir -p k8s/generated/core k8s/generated/services
-                        kompose convert -f core.yml -o k8s/generated/core --namespace ecommerce-dev
-                        kompose convert -f compose.yml -o k8s/generated/services --namespace ecommerce-dev
+                        /usr/local/bin/kompose convert -f core.yml -o k8s/generated/core --namespace ecommerce-dev
+                        /usr/local/bin/kompose convert -f compose.yml -o k8s/generated/services --namespace ecommerce-dev
 
                         # Apply manifests
                         kubectl apply -n ecommerce-dev -f k8s/generated/core
