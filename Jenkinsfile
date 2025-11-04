@@ -53,7 +53,19 @@ spec:
             steps {
                 container('maven') {
                     script {
-                        def services = ['favourite-service', 'order-service', 'payment-service', 'product-service', 'service-discovery', 'shipping-service', 'user-service']
+                        // Build ALL services that will be containerized so their JARs exist under each target/
+                        def services = [
+                            'api-gateway',
+                            'cloud-config',
+                            'proxy-client',
+                            'favourite-service',
+                            'order-service',
+                            'payment-service',
+                            'product-service',
+                            'service-discovery',
+                            'shipping-service',
+                            'user-service'
+                        ]
                         services.each { service ->
                             dir(service) {
                                 sh 'mvn clean package -DskipTests'
