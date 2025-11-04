@@ -95,96 +95,135 @@ spec:
             steps {
                 container('kubectl') {
                     sh '''
+                        set -euxo pipefail
                         kubectl version --client
-                        helm version
+                        # Prepare namespace
                         kubectl create namespace ecommerce-dev --dry-run=client -o yaml | kubectl apply -f -
-                        helm upgrade --install ecommerce ./helm-charts/ecommerce --namespace ecommerce-dev
+
+                        # Install kompose locally (Linux amd64)
+                        KVER="v1.32.0"
+                        curl -sSL -o /tmp/kompose.tar.gz https://github.com/kubernetes/kompose/releases/download/${KVER}/kompose-linux-amd64.tar.gz || true
+                        if [ -f /tmp/kompose.tar.gz ]; then
+                          tar -xz -C /usr/local/bin -f /tmp/kompose.tar.gz kompose
+                        else
+                          # Fallback: direct binary
+                          curl -sSL -o /usr/local/bin/kompose https://github.com/kubernetes/kompose/releases/download/${KVER}/kompose-linux-amd64
+                          chmod +x /usr/local/bin/kompose
+                        fi
+                        kompose version || true
+
+                        # Generate manifests from docker compose files
+                        rm -rf k8s/generated || true
+                        mkdir -p k8s/generated/core k8s/generated/services
+                        kompose convert -f core.yml -o k8s/generated/core --namespace ecommerce-dev
+                        kompose convert -f compose.yml -o k8s/generated/services --namespace ecommerce-dev
+
+                        # Apply manifests
+                        kubectl apply -n ecommerce-dev -f k8s/generated/core
+                        kubectl apply -n ecommerce-dev -f k8s/generated/services
                     '''
                 }
             }
         }
 
-                stage('Run E2E Tests') {
-                        steps {
-                                // Run services with Docker Compose inside the docker:dind container and execute Cypress in a container sharing the host network
-                                container('docker') {
-                                        script {
-                                                sh '''
-                                                    set -euxo pipefail
-                                                    echo "Docker version:" && docker version
-                                                    # Prefer docker compose plugin; fallback to docker-compose if needed
-                                                    if docker compose version >/dev/null 2>&1; then
-                                                        COMPOSE="docker compose"
-                                                    elif command -v docker-compose >/dev/null 2>&1; then
-                                                        COMPOSE="docker-compose"
-                                                    else
-                                                        echo "Docker Compose is not available" >&2
-                                                        exit 1
-                                                    fi
+        stage('K8s Smoke Tests') {
+            steps {
+                container('kubectl') {
+                    sh '''
+                        set -euxo pipefail
+                        NS=ecommerce-dev
+                        # Wait for pods to be Ready
+                        kubectl wait --for=condition=Ready pods --all -n "$NS" --timeout=600s || true
 
-                                                    # Build and start the entire stack (core + services) as one compose project
-                                                    $COMPOSE -f core.yml -f compose.yml up -d --build
-
-                                                    # Helper to wait for an HTTP endpoint to be ready via the dind host network
-                                                    wait_for() {
-                                                        local url="$1"; local name="$2"; local retries="${3:-60}"; local delay="${4:-5}";
-                                                        echo "Waiting for ${name} at ${url} ..."
-                                                        for i in $(seq 1 "$retries"); do
-                                                            if docker run --rm --network=host curlimages/curl:8.10.1 -sSf -o /dev/null "$url"; then
-                                                                echo "${name} is UP"
-                                                                return 0
-                                                            fi
-                                                            echo "Attempt $i/${retries} not ready yet; sleeping ${delay}s"
-                                                            sleep "$delay"
-                                                        done
-                                                        echo "Timeout waiting for ${name} at ${url}" >&2
-                                                        return 1
-                                                    }
-
-                                                    # Wait for core services first
-                                                    wait_for http://localhost:9296/actuator/health "cloud-config" 60 5
-                                                    wait_for http://localhost:8761/actuator/health "service-discovery (Eureka)" 60 5
-                                                    wait_for http://localhost:9411/health "zipkin" 60 5
-
-                                                    # Then wait for a subset of business services
-                                                    wait_for http://localhost:8700/actuator/health "user-service" 60 5
-                                                    wait_for http://localhost:8500/actuator/health "product-service" 60 5
-                                                    wait_for http://localhost:8300/actuator/health "order-service" 60 5
-                                                    wait_for http://localhost:8400/actuator/health "payment-service" 60 5
-                                                    wait_for http://localhost:8600/actuator/health "shipping-service" 60 5
-                                                    wait_for http://localhost:8800/actuator/health "favourite-service" 60 5
-                                                    wait_for http://localhost:8080/actuator/health "api-gateway" 60 5 || true
-
-                                                    # Run Cypress using the included image, sharing the dind host network so localhost:* works
-                                                    docker run --rm \
-                                                        --network=host \
-                                                        -v "$PWD/e2e-tests":/e2e \
-                                                        -w /e2e \
-                                                        -e CYPRESS_VERIFY_TIMEOUT=180000 \
-                                                        cypress/included:15.5.0
-                                                '''
-                                        }
-                                }
+                        kcurl() {
+                          local url="$1"; local name="$2";
+                          echo "Checking ${name}: ${url}"
+                          kubectl -n "$NS" run curl-$$ --rm -i --restart=Never --image=curlimages/curl:8.10.1 -- \
+                            sh -lc "curl -sSf -o /dev/null '${url}'" && echo "OK" || (echo "FAIL ${name}" && exit 1)
                         }
+
+                        # Core health
+                        kcurl http://cloud-config-container:9296/actuator/health cloud-config
+                        kcurl http://service-discovery-container:8761/actuator/health eureka
+                        kcurl http://zipkin-container:9411/health zipkin
+
+                        # Services health
+                        kcurl http://user-service-container:8700/actuator/health user-service
+                        kcurl http://product-service-container:8500/actuator/health product-service
+                        kcurl http://order-service-container:8300/actuator/health order-service
+                        kcurl http://payment-service-container:8400/actuator/health payment-service
+                        kcurl http://shipping-service-container:8600/actuator/health shipping-service
+                        kcurl http://favourite-service-container:8800/actuator/health favourite-service
+                    '''
                 }
+            }
+        }
+
+        stage('Wait for Services') {
+            steps {
+                container('kubectl') {
+                    sh '''
+                        echo "Waiting for deployments to be ready..."
+                        kubectl wait --for=condition=available --timeout=300s deployment --all -n ecommerce-dev || true
+                        
+                        echo "Listing all services in ecommerce-dev namespace:"
+                        kubectl get svc -n ecommerce-dev
+                        
+                        echo "Listing all pods in ecommerce-dev namespace:"
+                        kubectl get pods -n ecommerce-dev
+                        
+                        echo "Waiting additional 30 seconds for services to stabilize..."
+                        sleep 30
+                    '''
+                }
+            }
+        }
+
+        stage('Run E2E Tests') {
+            steps {
+                container('node') {
+                    sh 'apt-get update && apt-get install -y libgtk2.0-0 libgtk-3-0 libgbm-dev libnotify-dev libgconf-2-4 libnss3-dev libxss1 libasound2-dev libxtst6 xauth xvfb curl'
+                    dir('e2e-tests') {
+                        sh 'npm install'
+                        sh '''
+                            # Test connectivity to API Gateway before running tests
+                            echo "Testing connectivity to API Gateway..."
+                            max_attempts=30
+                            attempt=1
+                            
+                            while [ $attempt -le $max_attempts ]; do
+                                echo "Attempt $attempt of $max_attempts..."
+                                if curl -f http://api-gateway.ecommerce-dev.svc.cluster.local:8300/actuator/health; then
+                                    echo "API Gateway is ready!"
+                                    break
+                                fi
+                                
+                                if [ $attempt -eq $max_attempts ]; then
+                                    echo "API Gateway did not become ready in time"
+                                    exit 1
+                                fi
+                                
+                                echo "Waiting 10 seconds before retry..."
+                                sleep 10
+                                attempt=$((attempt + 1))
+                            done
+                            
+                            # Run Cypress tests
+                            export CYPRESS_BASE_URL=http://api-gateway.ecommerce-dev.svc.cluster.local:8300
+                            export CYPRESS_EUREKA_URL=http://service-discovery.ecommerce-dev.svc.cluster.local:8761
+                            xvfb-run -a npx cypress run --config baseUrl=http://api-gateway.ecommerce-dev.svc.cluster.local:8300
+                        '''
+                    }
+                }
+            }
+        }
     }
 
     post {
         always {
-                        container('docker') {
-                                // Tear down stack and cleanup space
-                                script {
-                                        sh '''
-                                            set +e
-                                            if docker compose version >/dev/null 2>&1; then
-                                                docker compose -f core.yml -f compose.yml down -v
-                                            elif command -v docker-compose >/dev/null 2>&1; then
-                                                docker-compose -f core.yml -f compose.yml down -v
-                                            fi
-                                            docker system prune -f
-                                        '''
-                                }
-                        }
+            container('docker') {
+                sh 'docker system prune -f'
+            }
         }
     }
 }

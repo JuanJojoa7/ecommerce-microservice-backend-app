@@ -1,11 +1,11 @@
 describe("Order Service E2E Tests", () => {
-  const baseUrl = "http://localhost:8300/order-service";
+  const baseUrl = `${Cypress.config('baseUrl')}/order-service`;
   let createdCartId;
   let createdOrderId;
 
   it("1. Should create a new cart", () => {
     const cartData = {
-      userId: 1, // Assuming user exists
+      userId: 1,
     };
 
     cy.request("POST", `${baseUrl}/api/carts`, cartData).then((response) => {
