@@ -36,7 +36,10 @@ spec:
     }
 
     environment {
-        DOCKER_REGISTRY = 'your-registry.com'
+        // Set your Docker Hub namespace (username or org). Update this to your account.
+        DOCKERHUB_NAMESPACE = 'your-dockerhub-username'
+        // Jenkins Credentials ID for Docker Hub (Username with Password / Token)
+        DOCKERHUB_CREDENTIALS_ID = 'dockerhub'
     }
 
     stages {
@@ -91,11 +94,57 @@ spec:
             }
         }
 
+        stage('Build and Push Images') {
+            steps {
+                container('docker') {
+                    script {
+                        withCredentials([usernamePassword(credentialsId: DOCKERHUB_CREDENTIALS_ID, usernameVariable: 'DOCKERHUB_USER', passwordVariable: 'DOCKERHUB_PASS')]) {
+                            sh '''
+                                set -euxo pipefail
+                                # Login to Docker Hub
+                                echo "$DOCKERHUB_PASS" | docker login -u "$DOCKERHUB_USER" --password-stdin
+
+                                # Tag to use (short git sha)
+                                TAG="${GIT_COMMIT:0:7}"
+
+                                build_push() {
+                                  local svc="$1";
+                                  local path="$1";
+                                  local img="docker.io/${DOCKERHUB_USER}/ecom-${svc}:${TAG}";
+                                  echo "Building ${img} from ${path}"
+                                  docker build -t "${img}" -f "${path}/Dockerfile" "${path}"
+                                  docker push "${img}"
+                                }
+
+                                # Core and services
+                                build_push api-gateway
+                                build_push cloud-config
+                                build_push service-discovery
+                                build_push proxy-client
+                                build_push user-service
+                                build_push product-service
+                                build_push order-service
+                                build_push payment-service
+                                build_push shipping-service
+                                build_push favourite-service
+
+                                # Persist variables for later stages
+                                echo DOCKERHUB_USER=${DOCKERHUB_USER} > .ci-env
+                                echo TAG=${TAG} >> .ci-env
+                            '''
+                        }
+                    }
+                }
+            }
+        }
+
         stage('Deploy to Kubernetes') {
             steps {
                 container('kubectl') {
                     sh '''
                         set -euxo pipefail
+                        # Load image variables from previous stage
+                        if [ -f .ci-env ]; then source .ci-env; else echo "Missing .ci-env with image info"; fi
                         kubectl version --client
                         # Prepare namespace
                         kubectl create namespace ecommerce-dev --dry-run=client -o yaml | kubectl apply -f -
@@ -113,39 +162,39 @@ spec:
                         # Remove auto-generated namespace file to avoid conflicts (we already created namespace)
                         rm -f k8s/generated/all/*namespace.yaml || true
 
-                                                # Patch images to public registry references so K8s can pull them
-                                                for f in k8s/generated/all/*-deployment.yaml; do
-                                                    case "$f" in
-                                                        *api-gateway-container-deployment.yaml)
-                                                            IMG=selimhorri/api-gateway-ecommerce-boot:0.1.0 ;;
-                                                        *cloud-config-container-deployment.yaml)
-                                                            IMG=selimhorri/cloud-config-ecommerce-boot:0.1.0 ;;
-                                                        *service-discovery-container-deployment.yaml)
-                                                            IMG=selimhorri/service-discovery-ecommerce-boot:0.1.0 ;;
-                                                        *proxy-client-container-deployment.yaml)
-                                                            IMG=selimhorri/proxy-client-ecommerce-boot:0.1.0 ;;
-                                                        *user-service-container-deployment.yaml)
-                                                            IMG=selimhorri/user-service-ecommerce-boot:0.1.0 ;;
-                                                        *product-service-container-deployment.yaml)
-                                                            IMG=selimhorri/product-service-ecommerce-boot:0.1.0 ;;
-                                                        *order-service-container-deployment.yaml)
-                                                            IMG=selimhorri/order-service-ecommerce-boot:0.1.0 ;;
-                                                        *payment-service-container-deployment.yaml)
-                                                            IMG=selimhorri/payment-service-ecommerce-boot:0.1.0 ;;
-                                                        *shipping-service-container-deployment.yaml)
-                                                            IMG=selimhorri/shipping-service-ecommerce-boot:0.1.0 ;;
-                                                        *favourite-service-container-deployment.yaml)
-                                                            IMG=selimhorri/favourite-service-ecommerce-boot:0.1.0 ;;
-                                                        *zipkin-container-deployment.yaml)
-                                                            IMG=openzipkin/zipkin:3.4 ;;
-                                                        *)
-                                                            IMG="" ;;
-                                                    esac
-                                                                                if [ -n "$IMG" ]; then
-                                                                                    # Replace the first 'image:' occurrence under the container spec (use # as sed delimiter to avoid issues with / in image)
-                                                                                    sed -i "0,/image:/s##image: ${IMG}#" "$f"
-                                                                                fi
-                                                done
+                        # Patch images to ones we just built and pushed
+                        for f in k8s/generated/all/*-deployment.yaml; do
+                            case "$f" in
+                                *api-gateway-container-deployment.yaml)
+                                    IMG="docker.io/${DOCKERHUB_USER}/ecom-api-gateway:${TAG}" ;;
+                                *cloud-config-container-deployment.yaml)
+                                    IMG="docker.io/${DOCKERHUB_USER}/ecom-cloud-config:${TAG}" ;;
+                                *service-discovery-container-deployment.yaml)
+                                    IMG="docker.io/${DOCKERHUB_USER}/ecom-service-discovery:${TAG}" ;;
+                                *proxy-client-container-deployment.yaml)
+                                    IMG="docker.io/${DOCKERHUB_USER}/ecom-proxy-client:${TAG}" ;;
+                                *user-service-container-deployment.yaml)
+                                    IMG="docker.io/${DOCKERHUB_USER}/ecom-user-service:${TAG}" ;;
+                                *product-service-container-deployment.yaml)
+                                    IMG="docker.io/${DOCKERHUB_USER}/ecom-product-service:${TAG}" ;;
+                                *order-service-container-deployment.yaml)
+                                    IMG="docker.io/${DOCKERHUB_USER}/ecom-order-service:${TAG}" ;;
+                                *payment-service-container-deployment.yaml)
+                                    IMG="docker.io/${DOCKERHUB_USER}/ecom-payment-service:${TAG}" ;;
+                                *shipping-service-container-deployment.yaml)
+                                    IMG="docker.io/${DOCKERHUB_USER}/ecom-shipping-service:${TAG}" ;;
+                                *favourite-service-container-deployment.yaml)
+                                    IMG="docker.io/${DOCKERHUB_USER}/ecom-favourite-service:${TAG}" ;;
+                                *zipkin-container-deployment.yaml)
+                                    IMG="openzipkin/zipkin:3.4" ;;
+                                *)
+                                    IMG="" ;;
+                            esac
+                            if [ -n "$IMG" ]; then
+                                # Replace the first 'image:' occurrence under the container spec (use # as sed delimiter to avoid issues with / in image)
+                                sed -i "0,/image:/s##image: ${IMG}#" "$f"
+                            fi
+                        done
 
                                                 # Apply manifests
                                                 kubectl apply -f k8s/generated/all
