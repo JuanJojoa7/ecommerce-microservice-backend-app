@@ -4,10 +4,9 @@ ARG PROJECT_VERSION=0.1.0
 RUN mkdir -p /home/app
 WORKDIR /home/app
 ENV SPRING_PROFILES_ACTIVE=dev
-COPY . .
 ARG JAR_FILE=target/*.jar
-COPY ${JAR_FILE} product-service.jar
+COPY ${JAR_FILE} app.jar
 EXPOSE 8500
-ENTRYPOINT ["java", "-Dspring.profiles.active=${SPRING_PROFILES_ACTIVE}", "-jar", "product-service.jar"]
+ENTRYPOINT ["java", "-Dspring.profiles.active=${SPRING_PROFILES_ACTIVE}", "-jar", "app.jar"]
 
 
