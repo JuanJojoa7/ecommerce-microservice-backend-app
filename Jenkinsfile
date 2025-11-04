@@ -106,15 +106,15 @@ spec:
                         chmod +x /usr/local/bin/kompose
                         /usr/local/bin/kompose version
 
-                        # Generate manifests from docker compose files
+                        # Generate manifests from docker compose files (combine core + services to satisfy depends_on)
                         rm -rf k8s/generated || true
-                        mkdir -p k8s/generated/core k8s/generated/services
-                        /usr/local/bin/kompose convert -f core.yml -o k8s/generated/core --namespace ecommerce-dev
-                        /usr/local/bin/kompose convert -f compose.yml -o k8s/generated/services --namespace ecommerce-dev
+                        mkdir -p k8s/generated/all
+                        /usr/local/bin/kompose convert -f core.yml -f compose.yml -o k8s/generated/all --namespace ecommerce-dev
+                        # Remove auto-generated namespace file to avoid conflicts (we already created namespace)
+                        rm -f k8s/generated/all/*namespace.yaml || true
 
                         # Apply manifests
-                        kubectl apply -n ecommerce-dev -f k8s/generated/core
-                        kubectl apply -n ecommerce-dev -f k8s/generated/services
+                        kubectl apply -f k8s/generated/all
                     '''
                 }
             }
