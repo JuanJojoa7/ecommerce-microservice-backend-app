@@ -113,8 +113,42 @@ spec:
                         # Remove auto-generated namespace file to avoid conflicts (we already created namespace)
                         rm -f k8s/generated/all/*namespace.yaml || true
 
-                        # Apply manifests
-                        kubectl apply -f k8s/generated/all
+                                                # Patch images to public registry references so K8s can pull them
+                                                for f in k8s/generated/all/*-deployment.yaml; do
+                                                    case "$f" in
+                                                        *api-gateway-container-deployment.yaml)
+                                                            IMG=selimhorri/api-gateway-ecommerce-boot:0.1.0 ;;
+                                                        *cloud-config-container-deployment.yaml)
+                                                            IMG=selimhorri/cloud-config-ecommerce-boot:0.1.0 ;;
+                                                        *service-discovery-container-deployment.yaml)
+                                                            IMG=selimhorri/service-discovery-ecommerce-boot:0.1.0 ;;
+                                                        *proxy-client-container-deployment.yaml)
+                                                            IMG=selimhorri/proxy-client-ecommerce-boot:0.1.0 ;;
+                                                        *user-service-container-deployment.yaml)
+                                                            IMG=selimhorri/user-service-ecommerce-boot:0.1.0 ;;
+                                                        *product-service-container-deployment.yaml)
+                                                            IMG=selimhorri/product-service-ecommerce-boot:0.1.0 ;;
+                                                        *order-service-container-deployment.yaml)
+                                                            IMG=selimhorri/order-service-ecommerce-boot:0.1.0 ;;
+                                                        *payment-service-container-deployment.yaml)
+                                                            IMG=selimhorri/payment-service-ecommerce-boot:0.1.0 ;;
+                                                        *shipping-service-container-deployment.yaml)
+                                                            IMG=selimhorri/shipping-service-ecommerce-boot:0.1.0 ;;
+                                                        *favourite-service-container-deployment.yaml)
+                                                            IMG=selimhorri/favourite-service-ecommerce-boot:0.1.0 ;;
+                                                        *zipkin-container-deployment.yaml)
+                                                            IMG=openzipkin/zipkin:3.4 ;;
+                                                        *)
+                                                            IMG="" ;;
+                                                    esac
+                                                    if [ -n "$IMG" ]; then
+                                                        # Replace the first 'image:' occurrence under the container spec
+                                                        sed -i "0,/image:/s//image: ${IMG}/" "$f"
+                                                    fi
+                                                done
+
+                                                # Apply manifests
+                                                kubectl apply -f k8s/generated/all
                     '''
                 }
             }
