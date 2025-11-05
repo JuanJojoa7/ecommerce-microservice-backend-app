@@ -95,15 +95,9 @@ Además de otros parámetros que sirven para configurar el inicio de cada pipeli
 - Las ejecuciones de Locust generan reportes HTML y CSV con latencias promedio, percentiles y tasa de errores para evaluar salud del entorno.
 - Monitoreo adicional planificado: integraciones con Prometheus/Grafana para validar KPIs en ejecuciones subsecuentes.
 
-![alt text](images/image-5.png)
-
 ## Pipeline completo
 
 ![alt text](images/image-4.png)
-
-## Pruebas de locust
-
-![alt text](images/image-8.png)
 
 ### Resumen general
 
