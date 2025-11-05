@@ -13,6 +13,10 @@ Se construyó una cadena de entrega completa para los microservicios: compilaci�
 - Configuración/secretos: las apps leen parámetros desde ConfigMaps/Secrets compartidos.
 
 ### Evidencia de configuración (Jenkins y cloud)
+Pantallas de login y dashboard de Jenkins:
+
+![Login Jenkins](images/image.png)
+![Home Jenkins](images/image-3.png)
 
 Definición de credenciales y cloud de Kubernetes:
 
@@ -69,6 +73,10 @@ Estas credenciales se utilizaron en la creación de un Cloud de minikube (kubern
 ![alt text](images/image-1.png)
 ![alt text](images/image-2.png)
 
+Después se procedió a crear el pipeline con la configuración del repositorio y las ramas involucradas (`dev` y `master`):
+
+![alt text](images/image-3.png)
+
 Además de otros parámetros que sirven para configurar el inicio de cada pipeline (configurados en el `Jenkinsfile`):
 
 ![alt text](images/image-7.png)
@@ -86,6 +94,10 @@ Además de otros parámetros que sirven para configurar el inicio de cada pipeli
 
 ### Análisis
 - Las pruebas unitarias existentes se ejecutaron correctamente, lo que muestra que los servicios están bien programados (durante la realización del taller se corrigieron algunos).
+
+Ejemplo de GET de products:
+
+![alt text](images/image-9.png)
 
 ## Pipeline QA (Stage Environment)
 - **Configuración**: reutiliza el mismo `Jenkinsfile` con etapa `Run Integration Tests`, invocando `mvn verify -Pintegration-tests` en cada microservicio para validar la comunicación entre servicios.
@@ -150,3 +162,8 @@ Durante la sesión (1 minuto), se ejecutaron 187 solicitudes en total sin ningun
 - **Integración**: perfil `integration-tests` para validar escenarios multi-servicio.
 - **E2E**: Cypress en `e2e-tests/cypress/e2e/*.cy.js` (favoritos, pedidos, pagos, productos, discovery, envíos y usuarios).
 - **Rendimiento (Locust)**: escenario actualizado en `load-tests/locustfile.py`, que recorre catálogo y creación de órdenes a través del API Gateway.
+
+## Completitud del Pipeline
+Una vez todas las pruebas se ejecutan exitosamente, se migra al namespace de producción:
+
+![alt text](images/image-6.png)
