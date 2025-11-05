@@ -174,42 +174,27 @@ spec:
                         # Remove auto-generated namespace file to avoid conflicts (we already created namespace)
                         rm -f k8s/generated/all/*namespace.yaml || true
 
-                        # Patch images to ones we just built and pushed
-                        for f in k8s/generated/all/*-deployment.yaml; do
-                            case "$f" in
-                                *api-gateway-container-deployment.yaml)
-                                    IMG="docker.io/${DOCKERHUB_USER}/ecom-api-gateway:${TAG}" ;;
-                                *cloud-config-container-deployment.yaml)
-                                    IMG="docker.io/${DOCKERHUB_USER}/ecom-cloud-config:${TAG}" ;;
-                                *service-discovery-container-deployment.yaml)
-                                    IMG="docker.io/${DOCKERHUB_USER}/ecom-service-discovery:${TAG}" ;;
-                                *proxy-client-container-deployment.yaml)
-                                    IMG="docker.io/${DOCKERHUB_USER}/ecom-proxy-client:${TAG}" ;;
-                                *user-service-container-deployment.yaml)
-                                    IMG="docker.io/${DOCKERHUB_USER}/ecom-user-service:${TAG}" ;;
-                                *product-service-container-deployment.yaml)
-                                    IMG="docker.io/${DOCKERHUB_USER}/ecom-product-service:${TAG}" ;;
-                                *order-service-container-deployment.yaml)
-                                    IMG="docker.io/${DOCKERHUB_USER}/ecom-order-service:${TAG}" ;;
-                                *payment-service-container-deployment.yaml)
-                                    IMG="docker.io/${DOCKERHUB_USER}/ecom-payment-service:${TAG}" ;;
-                                *shipping-service-container-deployment.yaml)
-                                    IMG="docker.io/${DOCKERHUB_USER}/ecom-shipping-service:${TAG}" ;;
-                                *favourite-service-container-deployment.yaml)
-                                    IMG="docker.io/${DOCKERHUB_USER}/ecom-favourite-service:${TAG}" ;;
-                                *zipkin-container-deployment.yaml)
-                                    IMG="openzipkin/zipkin:3.4" ;;
-                                *)
-                                    IMG="" ;;
-                            esac
-                            if [ -n "$IMG" ]; then
-                                # Replace the first 'image:' occurrence under the container spec (use # as sed delimiter to avoid issues with / in image)
-                                sed -i "0,/image:/s##image: ${IMG}#" "$f"
-                            fi
-                        done
+                        # Apply manifests
+                        kubectl apply -f k8s/generated/all
 
-                                                # Apply manifests
-                                                kubectl apply -f k8s/generated/all
+                        # Force-set images on live deployments to the ones we just built and pushed (avoid sed/apply drift)
+                        ns=ecommerce-dev
+                        kubectl -n "$ns" set image deployment/api-gateway-container api-gateway-container="docker.io/${DOCKERHUB_USER}/ecom-api-gateway:${TAG}" --record || true
+                        kubectl -n "$ns" set image deployment/cloud-config-container cloud-config-container="docker.io/${DOCKERHUB_USER}/ecom-cloud-config:${TAG}" --record || true
+                        kubectl -n "$ns" set image deployment/service-discovery-container service-discovery-container="docker.io/${DOCKERHUB_USER}/ecom-service-discovery:${TAG}" --record || true
+                        kubectl -n "$ns" set image deployment/proxy-client-container proxy-client-container="docker.io/${DOCKERHUB_USER}/ecom-proxy-client:${TAG}" --record || true
+                        kubectl -n "$ns" set image deployment/user-service-container user-service-container="docker.io/${DOCKERHUB_USER}/ecom-user-service:${TAG}" --record || true
+                        kubectl -n "$ns" set image deployment/product-service-container product-service-container="docker.io/${DOCKERHUB_USER}/ecom-product-service:${TAG}" --record || true
+                        kubectl -n "$ns" set image deployment/order-service-container order-service-container="docker.io/${DOCKERHUB_USER}/ecom-order-service:${TAG}" --record || true
+                        kubectl -n "$ns" set image deployment/payment-service-container payment-service-container="docker.io/${DOCKERHUB_USER}/ecom-payment-service:${TAG}" --record || true
+                        kubectl -n "$ns" set image deployment/shipping-service-container shipping-service-container="docker.io/${DOCKERHUB_USER}/ecom-shipping-service:${TAG}" --record || true
+                        kubectl -n "$ns" set image deployment/favourite-service-container favourite-service-container="docker.io/${DOCKERHUB_USER}/ecom-favourite-service:${TAG}" --record || true
+                        # zipkin stays public image
+
+                        # Wait for rollouts to complete
+                        for d in api-gateway-container cloud-config-container service-discovery-container proxy-client-container user-service-container product-service-container order-service-container payment-service-container shipping-service-container favourite-service-container; do
+                          kubectl -n "$ns" rollout status deployment/$d --timeout=300s || true
+                        done
                     '''
                 }
             }
