@@ -83,7 +83,7 @@ All that you want to do is just fire up your IDE **->** open or import the paren
 The first thing to do is to open **git bash** command line, and then simply you can clone the project under any of your favorite places as the following:
 
 ```bash
-> git clone https://github.com/JuanJojoa7/ecommerce-microservice-backend-app.git
+> git clone https://github.com/SelimHorri/ecommerce-microservice-backend-app.git
 ```
 
 ### Build & Test Them In Isolation

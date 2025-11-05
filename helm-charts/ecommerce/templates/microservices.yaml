@@ -19,8 +19,8 @@ spec:
     spec:
       containers:
       - name: user-service
-        image: selimhorri/user-service-ecommerce-boot:0.1.0
-        imagePullPolicy: IfNotPresent
+        image: user-service:latest
+        imagePullPolicy: Never
         ports:
         - containerPort: 8700
           name: http
@@ -30,29 +30,42 @@ spec:
             configMapKeyRef:
               name: microservices-config
               key: SPRING_PROFILES_ACTIVE
+        - name: EUREKA_CLIENT_REGION
+          value: "default"
+        - name: EUREKA_CLIENT_AVAILABILITYZONES_DEFAULT
+          value: "myzone"
+        - name: EUREKA_CLIENT_SERVICEURL_MYZONE
+          value: "http://service-discovery:8761/eureka"
         - name: EUREKA_CLIENT_SERVICEURL_DEFAULTZONE
-          valueFrom:
-            configMapKeyRef:
-              name: microservices-config
-              key: EUREKA_CLIENT_SERVICEURL_DEFAULTZONE
+          value: "http://service-discovery:8761/eureka/"
         - name: EUREKA_INSTANCE_HOSTNAME
           value: "user-service"
         - name: EUREKA_INSTANCE_NON_SECURE_PORT
           value: "8700"
         - name: SPRING_CONFIG_IMPORT
           value: "optional:configserver:http://cloud-config:9296/"
+        - name: SPRING_CLOUD_CONFIG_ALLOW_OVERRIDE
+          value: "true"
+        - name: SPRING_CLOUD_CONFIG_OVERRIDE_NONE
+          value: "true"
+        - name: SPRING_CLOUD_CONFIG_OVERRIDE_SYSTEM_PROPERTIES
+          value: "true"
         readinessProbe:
           httpGet:
-            path: /actuator/health
+            path: /user-service/actuator/health
             port: 8700
-          initialDelaySeconds: 60
+          initialDelaySeconds: 90
           periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
         livenessProbe:
           httpGet:
-            path: /actuator/health
+            path: /user-service/actuator/health
             port: 8700
           initialDelaySeconds: 120
           periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
 ---
 apiVersion: v1
 kind: Service
@@ -91,8 +104,8 @@ spec:
     spec:
       containers:
       - name: product-service
-        image: selimhorri/product-service-ecommerce-boot:0.1.0
-        imagePullPolicy: IfNotPresent
+        image: product-service:latest
+        imagePullPolicy: Never
         ports:
         - containerPort: 8500
           name: http
@@ -102,29 +115,42 @@ spec:
             configMapKeyRef:
               name: microservices-config
               key: SPRING_PROFILES_ACTIVE
+        - name: EUREKA_CLIENT_REGION
+          value: "default"
+        - name: EUREKA_CLIENT_AVAILABILITYZONES_DEFAULT
+          value: "myzone"
+        - name: EUREKA_CLIENT_SERVICEURL_MYZONE
+          value: "http://service-discovery:8761/eureka"
         - name: EUREKA_CLIENT_SERVICEURL_DEFAULTZONE
-          valueFrom:
-            configMapKeyRef:
-              name: microservices-config
-              key: EUREKA_CLIENT_SERVICEURL_DEFAULTZONE
+          value: "http://service-discovery:8761/eureka/"
         - name: EUREKA_INSTANCE_HOSTNAME
           value: "product-service"
         - name: EUREKA_INSTANCE_NON_SECURE_PORT
           value: "8500"
         - name: SPRING_CONFIG_IMPORT
           value: "optional:configserver:http://cloud-config:9296/"
+        - name: SPRING_CLOUD_CONFIG_ALLOW_OVERRIDE
+          value: "true"
+        - name: SPRING_CLOUD_CONFIG_OVERRIDE_NONE
+          value: "true"
+        - name: SPRING_CLOUD_CONFIG_OVERRIDE_SYSTEM_PROPERTIES
+          value: "true"
         readinessProbe:
           httpGet:
-            path: /actuator/health
+            path: /product-service/actuator/health
             port: 8500
-          initialDelaySeconds: 60
+          initialDelaySeconds: 90
           periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
         livenessProbe:
           httpGet:
-            path: /actuator/health
+            path: /product-service/actuator/health
             port: 8500
           initialDelaySeconds: 120
           periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
 ---
 apiVersion: v1
 kind: Service
@@ -163,8 +189,8 @@ spec:
     spec:
       containers:
       - name: order-service
-        image: selimhorri/order-service-ecommerce-boot:0.1.0
-        imagePullPolicy: IfNotPresent
+        image: order-service:latest
+        imagePullPolicy: Never
         ports:
         - containerPort: 8300
           name: http
@@ -174,29 +200,42 @@ spec:
             configMapKeyRef:
               name: microservices-config
               key: SPRING_PROFILES_ACTIVE
+        - name: EUREKA_CLIENT_REGION
+          value: "default"
+        - name: EUREKA_CLIENT_AVAILABILITYZONES_DEFAULT
+          value: "myzone"
+        - name: EUREKA_CLIENT_SERVICEURL_MYZONE
+          value: "http://service-discovery:8761/eureka"
         - name: EUREKA_CLIENT_SERVICEURL_DEFAULTZONE
-          valueFrom:
-            configMapKeyRef:
-              name: microservices-config
-              key: EUREKA_CLIENT_SERVICEURL_DEFAULTZONE
+          value: "http://service-discovery:8761/eureka/"
         - name: EUREKA_INSTANCE_HOSTNAME
           value: "order-service"
         - name: EUREKA_INSTANCE_NON_SECURE_PORT
           value: "8300"
         - name: SPRING_CONFIG_IMPORT
           value: "optional:configserver:http://cloud-config:9296/"
+        - name: SPRING_CLOUD_CONFIG_ALLOW_OVERRIDE
+          value: "true"
+        - name: SPRING_CLOUD_CONFIG_OVERRIDE_NONE
+          value: "true"
+        - name: SPRING_CLOUD_CONFIG_OVERRIDE_SYSTEM_PROPERTIES
+          value: "true"
         readinessProbe:
           httpGet:
-            path: /actuator/health
+            path: /order-service/actuator/health
             port: 8300
-          initialDelaySeconds: 60
+          initialDelaySeconds: 90
           periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
         livenessProbe:
           httpGet:
-            path: /actuator/health
+            path: /order-service/actuator/health
             port: 8300
           initialDelaySeconds: 120
           periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
 ---
 apiVersion: v1
 kind: Service
@@ -235,8 +274,8 @@ spec:
     spec:
       containers:
       - name: payment-service
-        image: selimhorri/payment-service-ecommerce-boot:0.1.0
-        imagePullPolicy: IfNotPresent
+        image: payment-service:latest
+        imagePullPolicy: Never
         ports:
         - containerPort: 8400
           name: http
@@ -246,29 +285,42 @@ spec:
             configMapKeyRef:
               name: microservices-config
               key: SPRING_PROFILES_ACTIVE
+        - name: EUREKA_CLIENT_REGION
+          value: "default"
+        - name: EUREKA_CLIENT_AVAILABILITYZONES_DEFAULT
+          value: "myzone"
+        - name: EUREKA_CLIENT_SERVICEURL_MYZONE
+          value: "http://service-discovery:8761/eureka"
         - name: EUREKA_CLIENT_SERVICEURL_DEFAULTZONE
-          valueFrom:
-            configMapKeyRef:
-              name: microservices-config
-              key: EUREKA_CLIENT_SERVICEURL_DEFAULTZONE
+          value: "http://service-discovery:8761/eureka/"
         - name: EUREKA_INSTANCE_HOSTNAME
           value: "payment-service"
         - name: EUREKA_INSTANCE_NON_SECURE_PORT
           value: "8400"
         - name: SPRING_CONFIG_IMPORT
           value: "optional:configserver:http://cloud-config:9296/"
+        - name: SPRING_CLOUD_CONFIG_ALLOW_OVERRIDE
+          value: "true"
+        - name: SPRING_CLOUD_CONFIG_OVERRIDE_NONE
+          value: "true"
+        - name: SPRING_CLOUD_CONFIG_OVERRIDE_SYSTEM_PROPERTIES
+          value: "true"
         readinessProbe:
           httpGet:
-            path: /actuator/health
+            path: /payment-service/actuator/health
             port: 8400
-          initialDelaySeconds: 60
+          initialDelaySeconds: 90
           periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
         livenessProbe:
           httpGet:
-            path: /actuator/health
+            path: /payment-service/actuator/health
             port: 8400
           initialDelaySeconds: 120
           periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
 ---
 apiVersion: v1
 kind: Service
@@ -307,8 +359,8 @@ spec:
     spec:
       containers:
       - name: shipping-service
-        image: selimhorri/shipping-service-ecommerce-boot:0.1.0
-        imagePullPolicy: IfNotPresent
+        image: shipping-service:latest
+        imagePullPolicy: Never
         ports:
         - containerPort: 8600
           name: http
@@ -318,29 +370,42 @@ spec:
             configMapKeyRef:
               name: microservices-config
               key: SPRING_PROFILES_ACTIVE
+        - name: EUREKA_CLIENT_REGION
+          value: "default"
+        - name: EUREKA_CLIENT_AVAILABILITYZONES_DEFAULT
+          value: "myzone"
+        - name: EUREKA_CLIENT_SERVICEURL_MYZONE
+          value: "http://service-discovery:8761/eureka"
         - name: EUREKA_CLIENT_SERVICEURL_DEFAULTZONE
-          valueFrom:
-            configMapKeyRef:
-              name: microservices-config
-              key: EUREKA_CLIENT_SERVICEURL_DEFAULTZONE
+          value: "http://service-discovery:8761/eureka/"
         - name: EUREKA_INSTANCE_HOSTNAME
           value: "shipping-service"
         - name: EUREKA_INSTANCE_NON_SECURE_PORT
           value: "8600"
         - name: SPRING_CONFIG_IMPORT
           value: "optional:configserver:http://cloud-config:9296/"
+        - name: SPRING_CLOUD_CONFIG_ALLOW_OVERRIDE
+          value: "true"
+        - name: SPRING_CLOUD_CONFIG_OVERRIDE_NONE
+          value: "true"
+        - name: SPRING_CLOUD_CONFIG_OVERRIDE_SYSTEM_PROPERTIES
+          value: "true"
         readinessProbe:
           httpGet:
-            path: /actuator/health
+            path: /shipping-service/actuator/health
             port: 8600
-          initialDelaySeconds: 60
+          initialDelaySeconds: 90
           periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
         livenessProbe:
           httpGet:
-            path: /actuator/health
+            path: /shipping-service/actuator/health
             port: 8600
           initialDelaySeconds: 120
           periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
 ---
 apiVersion: v1
 kind: Service
@@ -379,8 +444,8 @@ spec:
     spec:
       containers:
       - name: favourite-service
-        image: selimhorri/favourite-service-ecommerce-boot:0.1.0
-        imagePullPolicy: IfNotPresent
+        image: favourite-service:latest
+        imagePullPolicy: Never
         ports:
         - containerPort: 8800
           name: http
@@ -390,29 +455,42 @@ spec:
             configMapKeyRef:
               name: microservices-config
               key: SPRING_PROFILES_ACTIVE
+        - name: EUREKA_CLIENT_REGION
+          value: "default"
+        - name: EUREKA_CLIENT_AVAILABILITYZONES_DEFAULT
+          value: "myzone"
+        - name: EUREKA_CLIENT_SERVICEURL_MYZONE
+          value: "http://service-discovery:8761/eureka"
         - name: EUREKA_CLIENT_SERVICEURL_DEFAULTZONE
-          valueFrom:
-            configMapKeyRef:
-              name: microservices-config
-              key: EUREKA_CLIENT_SERVICEURL_DEFAULTZONE
+          value: "http://service-discovery:8761/eureka/"
         - name: EUREKA_INSTANCE_HOSTNAME
           value: "favourite-service"
         - name: EUREKA_INSTANCE_NON_SECURE_PORT
           value: "8800"
         - name: SPRING_CONFIG_IMPORT
           value: "optional:configserver:http://cloud-config:9296/"
+        - name: SPRING_CLOUD_CONFIG_ALLOW_OVERRIDE
+          value: "true"
+        - name: SPRING_CLOUD_CONFIG_OVERRIDE_NONE
+          value: "true"
+        - name: SPRING_CLOUD_CONFIG_OVERRIDE_SYSTEM_PROPERTIES
+          value: "true"
         readinessProbe:
           httpGet:
-            path: /actuator/health
+            path: /favourite-service/actuator/health
             port: 8800
-          initialDelaySeconds: 60
+          initialDelaySeconds: 90
           periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
         livenessProbe:
           httpGet:
-            path: /actuator/health
+            path: /favourite-service/actuator/health
             port: 8800
           initialDelaySeconds: 120
           periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
 ---
 apiVersion: v1
 kind: Service
