@@ -177,18 +177,24 @@ spec:
                         # Apply manifests
                         kubectl apply -f k8s/generated/all
 
+                                                # Kompose maps Compose host ports into pod hostPort, which blocks rollouts on a single node.
+                                                # Remove hostPort from all deployments to avoid scheduling/rollout conflicts.
+                                                for d in api-gateway-container cloud-config-container service-discovery-container proxy-client-container user-service-container product-service-container order-service-container payment-service-container shipping-service-container favourite-service-container; do
+                                                    kubectl -n ecommerce-dev patch deployment "$d" --type='json' -p='[{"op": "remove", "path": "/spec/template/spec/containers/0/ports/0/hostPort"}]' || true
+                                                done
+
                         # Force-set images on live deployments to the ones we just built and pushed (avoid sed/apply drift)
                         ns=ecommerce-dev
-                        kubectl -n "$ns" set image deployment/api-gateway-container api-gateway-container="docker.io/${DOCKERHUB_USER}/ecom-api-gateway:${TAG}" --record || true
-                        kubectl -n "$ns" set image deployment/cloud-config-container cloud-config-container="docker.io/${DOCKERHUB_USER}/ecom-cloud-config:${TAG}" --record || true
-                        kubectl -n "$ns" set image deployment/service-discovery-container service-discovery-container="docker.io/${DOCKERHUB_USER}/ecom-service-discovery:${TAG}" --record || true
-                        kubectl -n "$ns" set image deployment/proxy-client-container proxy-client-container="docker.io/${DOCKERHUB_USER}/ecom-proxy-client:${TAG}" --record || true
-                        kubectl -n "$ns" set image deployment/user-service-container user-service-container="docker.io/${DOCKERHUB_USER}/ecom-user-service:${TAG}" --record || true
-                        kubectl -n "$ns" set image deployment/product-service-container product-service-container="docker.io/${DOCKERHUB_USER}/ecom-product-service:${TAG}" --record || true
-                        kubectl -n "$ns" set image deployment/order-service-container order-service-container="docker.io/${DOCKERHUB_USER}/ecom-order-service:${TAG}" --record || true
-                        kubectl -n "$ns" set image deployment/payment-service-container payment-service-container="docker.io/${DOCKERHUB_USER}/ecom-payment-service:${TAG}" --record || true
-                        kubectl -n "$ns" set image deployment/shipping-service-container shipping-service-container="docker.io/${DOCKERHUB_USER}/ecom-shipping-service:${TAG}" --record || true
-                        kubectl -n "$ns" set image deployment/favourite-service-container favourite-service-container="docker.io/${DOCKERHUB_USER}/ecom-favourite-service:${TAG}" --record || true
+                                                kubectl -n "$ns" set image deployment/api-gateway-container api-gateway-container="docker.io/${DOCKERHUB_USER}/ecom-api-gateway:${TAG}" || true
+                                                kubectl -n "$ns" set image deployment/cloud-config-container cloud-config-container="docker.io/${DOCKERHUB_USER}/ecom-cloud-config:${TAG}" || true
+                                                kubectl -n "$ns" set image deployment/service-discovery-container service-discovery-container="docker.io/${DOCKERHUB_USER}/ecom-service-discovery:${TAG}" || true
+                                                kubectl -n "$ns" set image deployment/proxy-client-container proxy-client-container="docker.io/${DOCKERHUB_USER}/ecom-proxy-client:${TAG}" || true
+                                                kubectl -n "$ns" set image deployment/user-service-container user-service-container="docker.io/${DOCKERHUB_USER}/ecom-user-service:${TAG}" || true
+                                                kubectl -n "$ns" set image deployment/product-service-container product-service-container="docker.io/${DOCKERHUB_USER}/ecom-product-service:${TAG}" || true
+                                                kubectl -n "$ns" set image deployment/order-service-container order-service-container="docker.io/${DOCKERHUB_USER}/ecom-order-service:${TAG}" || true
+                                                kubectl -n "$ns" set image deployment/payment-service-container payment-service-container="docker.io/${DOCKERHUB_USER}/ecom-payment-service:${TAG}" || true
+                                                kubectl -n "$ns" set image deployment/shipping-service-container shipping-service-container="docker.io/${DOCKERHUB_USER}/ecom-shipping-service:${TAG}" || true
+                                                kubectl -n "$ns" set image deployment/favourite-service-container favourite-service-container="docker.io/${DOCKERHUB_USER}/ecom-favourite-service:${TAG}" || true
                         # zipkin stays public image
 
                         # Wait for rollouts to complete
@@ -209,25 +215,27 @@ spec:
                         # Wait for pods to be Ready
                         kubectl wait --for=condition=Ready pods --all -n "$NS" --timeout=600s || true
 
-                        kcurl() {
+                        # Helper: succeed if we can connect (any HTTP status other than 000)
+                        kcheck() {
                           local url="$1"; local name="$2";
                           echo "Checking ${name}: ${url}"
                           kubectl -n "$NS" run curl-$$ --rm -i --restart=Never --image=curlimages/curl:8.10.1 -- \
-                            sh -lc "curl -sSf -o /dev/null '${url}'" && echo "OK" || (echo "FAIL ${name}" && exit 1)
+                            sh -lc "code=\"$(curl -s -o /dev/null -w '%{http_code}' '${url}' || true)\"; [ \"$code\" != \"000\" ]" \
+                            && echo "OK ${name}" || (echo "FAIL ${name}" && exit 1)
                         }
 
                         # Core health
-                        kcurl http://cloud-config-container:9296/actuator/health cloud-config
-                        kcurl http://service-discovery-container:8761/actuator/health eureka
-                        kcurl http://zipkin-container:9411/health zipkin
+                        kcheck http://cloud-config-container:9296/actuator/health cloud-config
+                        kcheck http://service-discovery-container:8761/actuator/health eureka
+                        kcheck http://zipkin-container:9411/health zipkin
 
-                        # Services health
-                        kcurl http://user-service-container:8700/actuator/health user-service
-                        kcurl http://product-service-container:8500/actuator/health product-service
-                        kcurl http://order-service-container:8300/actuator/health order-service
-                        kcurl http://payment-service-container:8400/actuator/health payment-service
-                        kcurl http://shipping-service-container:8600/actuator/health shipping-service
-                        kcurl http://favourite-service-container:8800/actuator/health favourite-service
+                        # Services connectivity (use root path to avoid actuator dependency)
+                        kcheck http://user-service-container:8700/ user-service
+                        kcheck http://product-service-container:8500/ product-service
+                        kcheck http://order-service-container:8300/ order-service
+                        kcheck http://payment-service-container:8400/ payment-service
+                        kcheck http://shipping-service-container:8600/ shipping-service
+                        kcheck http://favourite-service-container:8800/ favourite-service
                     '''
                 }
             }
@@ -267,7 +275,7 @@ spec:
                             
                             while [ $attempt -le $max_attempts ]; do
                                 echo "Attempt $attempt of $max_attempts..."
-                                if curl -f http://api-gateway.ecommerce-dev.svc.cluster.local:8300/actuator/health; then
+                                if curl -f http://api-gateway-container.ecommerce-dev.svc.cluster.local:8080/actuator/health; then
                                     echo "API Gateway is ready!"
                                     break
                                 fi
@@ -283,9 +291,9 @@ spec:
                             done
                             
                             # Run Cypress tests
-                            export CYPRESS_BASE_URL=http://api-gateway.ecommerce-dev.svc.cluster.local:8300
-                            export CYPRESS_EUREKA_URL=http://service-discovery.ecommerce-dev.svc.cluster.local:8761
-                            xvfb-run -a npx cypress run --config baseUrl=http://api-gateway.ecommerce-dev.svc.cluster.local:8300
+                            export CYPRESS_BASE_URL=http://api-gateway-container.ecommerce-dev.svc.cluster.local:8080
+                            export CYPRESS_EUREKA_URL=http://service-discovery-container.ecommerce-dev.svc.cluster.local:8761
+                            xvfb-run -a npx cypress run --config baseUrl=http://api-gateway-container.ecommerce-dev.svc.cluster.local:8080
                         '''
                     }
                 }
