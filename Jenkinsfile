@@ -215,14 +215,15 @@ spec:
                         # Wait for pods to be Ready
                         kubectl wait --for=condition=Ready pods --all -n "$NS" --timeout=600s || true
 
-                        # Helper: succeed if we can connect (any HTTP status other than 000)
-                        kcheck() {
-                          local url="$1"; local name="$2";
-                          echo "Checking ${name}: ${url}"
-                          kubectl -n "$NS" run curl-$$ --rm -i --restart=Never --image=curlimages/curl:8.10.1 -- \
-                            sh -lc "code=\"$(curl -s -o /dev/null -w '%{http_code}' '${url}' || true)\"; [ \"$code\" != \"000\" ]" \
-                            && echo "OK ${name}" || (echo "FAIL ${name}" && exit 1)
-                        }
+                                                # Helper: connectivity check — succeed if TCP connect & HTTP exchange works (status code ignored)
+                                                kcheck() {
+                                                    local url="$1"; local name="$2";
+                                                    echo "Checking ${name}: ${url}"
+                                                    # Use a unique pod name to avoid name collisions on retries
+                                                    kubectl -n "$NS" run curl-$(date +%s%N) --rm -i --restart=Never --image=curlimages/curl:8.10.1 -- \
+                                                        sh -lc "curl -s -o /dev/null '${url}'" \
+                                                        && echo "OK ${name}" || (echo "FAIL ${name}" && exit 1)
+                                                }
 
                         # Core health
                         kcheck http://cloud-config-container:9296/actuator/health cloud-config
