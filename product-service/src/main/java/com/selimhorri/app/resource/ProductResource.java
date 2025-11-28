@@ -16,7 +16,6 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.selimhorri.app.dto.ProductDto;
 import com.selimhorri.app.dto.response.collection.DtoCollectionResponse;
-import com.selimhorri.app.exception.wrapper.ValidationException;
 import com.selimhorri.app.service.ProductService;
 
 import lombok.RequiredArgsConstructor;
@@ -42,15 +41,7 @@ public class ProductResource {
 			@NotBlank(message = "Input must not be blank!") 
 			@Valid final String productId) {
 		log.info("*** ProductDto, resource; fetch product by id *");
-		try {
-			final int id = Integer.parseInt(productId.strip());
-			if (id <= 0) {
-				throw new ValidationException("Product ID must be a positive integer");
-			}
-			return ResponseEntity.ok(this.productService.findById(id));
-		} catch (NumberFormatException e) {
-			throw new ValidationException("Invalid product ID format");
-		}
+		return ResponseEntity.ok(this.productService.findById(Integer.parseInt(productId)));
 	}
 	
 	@PostMapping
@@ -86,16 +77,8 @@ public class ProductResource {
 	@DeleteMapping("/{productId}")
 	public ResponseEntity<Boolean> deleteById(@PathVariable("productId") final String productId) {
 		log.info("*** Boolean, resource; delete product by id *");
-		try {
-			final int id = Integer.parseInt(productId.strip());
-			if (id <= 0) {
-				throw new ValidationException("Product ID must be a positive integer");
-			}
-			this.productService.deleteById(id);
-			return ResponseEntity.ok(true);
-		} catch (NumberFormatException e) {
-			throw new ValidationException("Invalid product ID format");
-		}
+		this.productService.deleteById(Integer.parseInt(productId));
+		return ResponseEntity.ok(true);
 	}
 	
 	

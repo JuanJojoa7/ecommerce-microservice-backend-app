@@ -16,7 +16,6 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.selimhorri.app.dto.CategoryDto;
 import com.selimhorri.app.dto.response.collection.DtoCollectionResponse;
-import com.selimhorri.app.exception.wrapper.ValidationException;
 import com.selimhorri.app.service.CategoryService;
 
 import lombok.RequiredArgsConstructor;
@@ -42,15 +41,7 @@ public class CategoryResource {
 			@NotBlank(message = "Input must not be blank") 
 			@Valid final String categoryId) {
 		log.info("*** CategoryDto, resource; fetch category by id *");
-		try {
-			final int id = Integer.parseInt(categoryId.strip());
-			if (id <= 0) {
-				throw new ValidationException("Category ID must be a positive integer");
-			}
-			return ResponseEntity.ok(this.categoryService.findById(id));
-		} catch (NumberFormatException e) {
-			throw new ValidationException("Invalid category ID format");
-		}
+		return ResponseEntity.ok(this.categoryService.findById(Integer.parseInt(categoryId)));
 	}
 	
 	@PostMapping
@@ -86,16 +77,8 @@ public class CategoryResource {
 	@DeleteMapping("/{categoryId}")
 	public ResponseEntity<Boolean> deleteById(@PathVariable("categoryId") final String categoryId) {
 		log.info("*** Boolean, resource; delete category by id *");
-		try {
-			final int id = Integer.parseInt(categoryId.strip());
-			if (id <= 0) {
-				throw new ValidationException("Category ID must be a positive integer");
-			}
-			this.categoryService.deleteById(id);
-			return ResponseEntity.ok(true);
-		} catch (NumberFormatException e) {
-			throw new ValidationException("Invalid category ID format");
-		}
+		this.categoryService.deleteById(Integer.parseInt(categoryId));
+		return ResponseEntity.ok(true);
 	}
 	
 	

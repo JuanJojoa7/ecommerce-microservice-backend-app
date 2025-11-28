@@ -32,6 +32,8 @@ build/
 ### VS Code ###
 .vscode/
 
-### Cypress ###
-node_modules/
-screenshots/
+### DockerHub & Secrets (DO NOT COMMIT) ###
+**/DOCKERHUB-SETUP.md
+**/.dockerhub-token
+**/dockerhub-secret.yaml
+**/*-credentials.yaml

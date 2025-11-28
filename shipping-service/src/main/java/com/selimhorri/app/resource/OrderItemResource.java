@@ -1,7 +1,5 @@
 package com.selimhorri.app.resource;
 
-import com.selimhorri.app.exception.wrapper.ValidationException;
-
 import javax.validation.Valid;
 import javax.validation.constraints.NotNull;
 
@@ -42,16 +40,8 @@ public class OrderItemResource {
 			@PathVariable("orderId") final String orderId, 
 			@PathVariable("productId") final String productId) {
 		log.info("*** OrderItemDto, resource; fetch orderItem by id *");
-		try {
-			final int oId = Integer.parseInt(orderId.strip());
-			final int pId = Integer.parseInt(productId.strip());
-			if (oId <= 0 || pId <= 0) {
-				throw new ValidationException("Order ID and Product ID must be positive integers");
-			}
-			return ResponseEntity.ok(this.orderItemService.findById(new OrderItemId(oId, pId)));
-		} catch (NumberFormatException e) {
-			throw new ValidationException("Invalid order ID or product ID format");
-		}
+		return ResponseEntity.ok(this.orderItemService.findById(
+				new OrderItemId(Integer.parseInt(orderId), Integer.parseInt(productId))));
 	}
 	
 	@GetMapping("/find")
@@ -86,17 +76,8 @@ public class OrderItemResource {
 			@PathVariable("orderId") final String orderId, 
 			@PathVariable("productId") final String productId) {
 		log.info("*** Boolean, resource; delete orderItem by id *");
-		try {
-			final int oId = Integer.parseInt(orderId.strip());
-			final int pId = Integer.parseInt(productId.strip());
-			if (oId <= 0 || pId <= 0) {
-				throw new ValidationException("Order ID and Product ID must be positive integers");
-			}
-			this.orderItemService.deleteById(new OrderItemId(oId, pId));
-			return ResponseEntity.ok(true);
-		} catch (NumberFormatException e) {
-			throw new ValidationException("Invalid order ID or product ID format");
-		}
+		this.orderItemService.deleteById(new OrderItemId(Integer.parseInt(orderId), Integer.parseInt(productId)));
+		return ResponseEntity.ok(true);
 	}
 	
 	@DeleteMapping("/delete")

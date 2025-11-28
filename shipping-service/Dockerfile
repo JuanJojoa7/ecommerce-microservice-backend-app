@@ -1,10 +1,19 @@
+# Multi-stage Dockerfile for shipping-service
+FROM maven:3.9.9-eclipse-temurin-17 AS builder
+WORKDIR /build
+COPY pom.xml .
+RUN mvn dependency:go-offline -B
+COPY src ./src
+RUN mvn clean package -DskipTests -B
 
-FROM eclipse-temurin:11-jre
-ARG PROJECT_VERSION=0.1.0
-RUN mkdir -p /home/app
-WORKDIR /home/app
-COPY target/*.jar shipping-service.jar
+FROM eclipse-temurin:17-jre-alpine
+RUN addgroup -S spring && adduser -S spring -G spring
+WORKDIR /app
+COPY --from=builder /build/target/*.jar app.jar
+RUN chown spring:spring app.jar
+USER spring:spring
 EXPOSE 8600
-ENTRYPOINT ["java", "-jar", "shipping-service.jar"]
-
+HEALTHCHECK --interval=30s --timeout=3s --start-period=40s --retries=3 \
+  CMD wget --no-verbose --tries=1 --spider http://localhost:8600/actuator/health || exit 1
+ENTRYPOINT ["java", "-Djava.security.egd=file:/dev/./urandom", "-jar", "app.jar"]
 

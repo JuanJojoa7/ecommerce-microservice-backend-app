@@ -1,3 +1,72 @@
+# Informe final – Ecommerce Microservices (fork)
+
+**Autores:** Juan Felipe Jojoa Crespo & Felipe Rojas Prado
+
+- 🎥 **Presentación en video:** [YouTube – Presentación Juan Felipe Jojoa y Felipe Rojas](https://youtu.be/ioxino6q5X8)
+- 📑 **Presentación ejecutiva:** [Canva – Informe Final](https://www.canva.com/design/DAG5tCyY6s4/VEK28H27qFYEDaAt3_JFdw/edit?utm_content=DAG5tCyY6s4&utm_campaign=designshare&utm_medium=link2&utm_source=sharebutton)
+- 📄 **Informe escrito:** [`doc/ReporteFinal.pdf`](doc/ReporteFinal.pdf)
+
+## Navegación rápida
+
+- [Resumen del entregable](#resumen-del-entregable)
+- [Recursos documentados](#recursos-documentados)
+- [Observabilidad & Logging (`k8s/observability`, `k8s/logging`)](#recursos-documentados)
+- [Seguridad (`k8s/security`)](#recursos-documentados)
+- [CI/CD Avanzado (GitHub Actions)](#ci/cd-con-github-actions)
+- [Subdocumentación y anexos](#subdocumentación-y-referencias)
+- [Presentación en video](https://youtu.be/ioxino6q5X8)
+- [Presentación Canva](https://www.canva.com/design/DAG5tCyY6s4/VEK28H27qFYEDaAt3_JFdw/edit?utm_content=DAG5tCyY6s4&utm_campaign=designshare&utm_medium=link2&utm_source=sharebutton)
+- [Informe PDF](doc/ReporteFinal.pdf)
+
+## Resumen del entregable
+
+- Modernizamos el fork para ejecutar los seis microservicios principales y el API Gateway dentro de Kubernetes, con manifiestos listos para AKS/local y contenedores publicados en ACR.
+- Habilitamos observabilidad completa (Prometheus, Grafana, Alertmanager, Zipkin, ELK, métricas de negocio y alertas) más un Ingress TLS dedicado para acceder a los tableros.
+- Aseguramos el plano de control con RBAC específico para el gateway y TLS de extremo a extremo (secrets `api-gateway-tls` y `observability-tls`).
+- Construimos un pipeline avanzado en **GitHub Actions** que ejecuta build, pruebas, análisis estático, escaneo de vulnerabilidades, empaqueta imágenes, despliega en AKS y corre smoke/performance/ZAP tests con artefactos de evidencia.
+
+## Recursos documentados
+
+### Arquitectura Kubernetes
+- `k8s-6-services.yaml`: despliegue compacto de API Gateway + order/payment/shipping/product/user services con perfiles `docker` y límites de recursos.
+- `k8s/` (subcarpetas por microservicio) mantienen los manifiestos granulares para entornos completos; el README original del fork se conserva más abajo.
+
+### Observabilidad & Logging
+- `k8s/observability/` + `k8s/logging/`: manifiestos de Prometheus, Grafana, Alertmanager, Zipkin, Elasticsearch, Logstash, Filebeat y Kibana listos para aplicar (`kubectl apply -R`).
+- `k8s/security/observability-ingress.yaml`: Ingress TLS único (`observability.ecommerce.local`) que enruta `/grafana`, `/kibana`, `/alertmanager` y `/zipkin` (se requiere secret `observability-tls`).
+- Métricas de negocio instrumentadas en `order-service` y `payment-service` alimentan los dashboards provisionados en `k8s/observability/grafana-configmap.yaml`.
+
+### Seguridad
+- `k8s/security/api-gateway-rbac.yaml`: ServiceAccount + Role + RoleBinding que limitan al gateway a leer solo los ConfigMaps y Services necesarios.
+- `k8s/security/api-gateway-ingress.yaml`: Ingress HTTPS para el gateway usando el secret `api-gateway-tls`; documentado en la sección de Seguridad del README.
+
+### CI/CD con GitHub Actions
+- Workflow principal: `.github/workflows/cicd-pipeline.yml`.
+    - **Build & Test:** compila con JDK 17, genera JaCoCo y publica resultados.
+    - **Semantic Version:** calcula tags tipo `vX.Y.Z` (fallback por fecha) y libera notas en `master`.
+    - **Security Scan:** Trivy (filesystem) + OWASP Dependency Check con subida de SARIF/artifacts.
+    - **Build Docker Images:** matriz por servicio, múltiples tags (`version`, `sha`, `latest`, `semver`) y escaneo Trivy por imagen.
+    - **Deploy to AKS:** aplica `k8s-6-services`, espera rollouts, listar pods/svc y smoke test vía `/actuator/health`.
+    - **Performance Test:** ejecuta Locust headless contra el API Gateway expuesto.
+    - **ZAP Scan:** realiza OWASP ZAP Baseline posterior al despliegue.
+    - **Deploy to Prod (manual):** requiere `workflow_dispatch` y approvals de environment.
+    - **Notify:** imprime estatus consolidado, envía Slack (si hay secret) y crea issue cuando falla.
+
+## Subdocumentación y referencias
+
+| Tema | Ruta / Enlace | Descripción |
+| --- | --- | --- |
+| Observabilidad (cómo desplegar cada componente) | `k8s/observability/README.md` | Pasos para namespace, Prometheus, Grafana, Alertmanager y Zipkin. |
+| Logging centralizado | `k8s/logging/README.md` | Flujo Filebeat → Logstash → Elasticsearch → Kibana orientado al namespace `ecommerce`. |
+| Seguridad | `k8s/security/README.md` | Instrucciones para crear TLS y aplicar RBAC/Ingress del API Gateway. |
+| CI/CD avanzado | `.github/workflows/cicd-pipeline.yml` | Pipeline completo descrito arriba; usar como referencia para despliegues automatizados. |
+| Kubernetes manifiestos individuales | `k8s/*.yaml` | ConfigMaps, Services y Deployments granulares heredados del repo original y extendidos en este fork. |
+| Informe escrito | `doc/ReporteFinal.pdf` | Documento final entregado con contexto, métricas y hallazgos. |
+| Video de presentación | [YouTube](https://youtu.be/ioxino6q5X8) | Demostración ejecutiva del resultado final. |
+| Presentación ejecutiva | [Canva](https://www.canva.com/design/DAG5tCyY6s4/VEK28H27qFYEDaAt3_JFdw/edit?utm_content=DAG5tCyY6s4&utm_campaign=designshare&utm_medium=link2&utm_source=sharebutton) | Slides entregables con arquitectura, métricas y lecciones aprendidas. |
+
+---
+
 # e-Commerce-boot μServices 
 
 ## Important Note: This project's new milestone is to move The whole system to work on Kubernetes, so stay tuned.
@@ -37,6 +106,105 @@ ecommerce-microservice-backend-app [μService] --> Parent folder.
 |- test-em-all.sh --> This will start all docker compose landscape and test them, then shutdown docker compose containers with test finishes (use switch start stop)
 ```
 Now, as we have learned about different system components, then let's start.
+
+### Windows Quickstart (PowerShell)
+
+If you are on Windows and using PowerShell, follow these steps to run the project locally:
+
+1) Ensure Java 11 is active in your shell
+
+```powershell
+# Update the path below to your installed JDK 11 directory
+$env:JAVA_HOME = "C:\\Program Files\\Eclipse Adoptium\\jdk-11.0.24+8"
+$env:Path = "$env:JAVA_HOME\\bin;$env:Path"
+
+# Verify Maven wrapper now uses Java 11
+cd "C:\\Icesi\\Semestre8\\IngesoftV\\Taller 2\\ecommerce-microservice-backend-app"
+.\\mvnw.cmd -v
+```
+
+2) Build all microservices
+
+```powershell
+.\\mvnw.cmd clean package
+```
+
+3) Start the full landscape with Docker
+
+```powershell
+# Make sure Docker Desktop is running
+docker compose -f compose.yml up -d
+```
+
+4) Smoke test endpoints (use 127.0.0.1 on Windows to avoid proxy issues)
+
+- Eureka UI: http://127.0.0.1:8761/
+- API Gateway actuator: http://127.0.0.1:8080/app/actuator/health
+- Proxy Client Swagger: http://127.0.0.1:8900/swagger-ui.html
+- Zipkin UI: http://127.0.0.1:9411/zipkin/
+
+Notes:
+- The Docker Compose file is configured with the `docker` Spring profile so services discover each other via the internal Docker network.
+- If ports are busy on your machine, adjust the port mappings in `compose.yml` accordingly.
+
+## Observabilidad y Monitoreo
+
+El proyecto ahora cumple los siete puntos del rúbro de observabilidad:
+
+- **Prometheus + Grafana**: Los manifiestos dentro de `k8s/observability` despliegan Prometheus (con reglas de alerta listas), Grafana (con dashboards técnicos y de negocio) y Alertmanager. Despliegue rápido:
+
+    ```bash
+    kubectl apply -f k8s/observability/namespace.yaml
+    kubectl apply -f k8s/observability/prometheus-configmap.yaml
+    kubectl apply -f k8s/observability/prometheus-deployment.yaml
+    kubectl apply -f k8s/observability/grafana-configmap.yaml
+    kubectl apply -f k8s/observability/grafana-deployment.yaml
+    kubectl apply -f k8s/observability/alertmanager-config.yaml
+    kubectl apply -f k8s/observability/zipkin.yaml
+    ```
+
+    Exponé Grafana con `kubectl -n observability port-forward svc/grafana 3000:3000` (usuario `admin`, contraseña `admin1234`).
+
+- **ELK Stack**: `k8s/logging` contiene Elasticsearch (statefulset con PVC), Logstash y Filebeat (DaemonSet) además de Kibana. Se limita la recolección a los pods del namespace `ecommerce`.
+
+- **Alertas críticas**: `prometheus-configmap.yaml` define alertas para pods caídos, errores 5xx, ausencia de órdenes y tasa de fallos en pagos. Alertmanager reenvía a un webhook o SMTP configurable.
+
+- **Tracing distribuido**: Zipkin vive en `observability` y se integra mediante las variables `SPRING_ZIPKIN_*` reactivadas en `k8s/configmap.yaml`. En Kubernetes los servicios envían spans a `http://zipkin-server.observability:9411`.
+
+- **Health checks**: Todos los manifiestos de `k8s/*.yaml` incluyen probes de readiness/liveness (y el `all-in-one.yaml` ahora replica la misma configuración) apuntando a `/actuator/health`.
+
+- **Métricas de negocio**: `order-service` emite `order_service_orders_created_total` y `order_service_order_fee_total`; `payment-service` expone `payment_service_payments_total`, `payment_service_payments_failed_total` y `payment_service_payments_amount_total`. Estos KPIs alimentan los dashboards y alertas.
+
+- **Dashboards**: `k8s/observability/grafana-configmap.yaml` provisiona dos dashboards (estado técnico y KPIs) listos para importar o extender.
+
+- **Centralización de logs**: `k8s/logging` despliega Filebeat → Logstash → Elasticsearch → Kibana. Exponé Kibana con `kubectl -n observability port-forward svc/kibana 5601:5601`.
+
+> Sugerencia: aplicá los manifiestos de observabilidad en un pipeline opcional (por ejemplo, `kubectl apply -k k8s/observability`) para no tocar el pipeline actual hasta que se necesite monitoreo.
+
+## Seguridad
+
+- **RBAC**: el API Gateway ahora corre con el ServiceAccount `gateway-sa`, limitado por el `Role` definido en `k8s/security/api-gateway-rbac.yaml`. Aplicá el manifiesto antes de desplegar el gateway:
+
+    ```bash
+    kubectl apply -f k8s/security/api-gateway-rbac.yaml
+    kubectl apply -f k8s/api-gateway.yaml
+    ```
+
+    El manifiesto `k8s/all-in-one.yaml` incluye las mismas definiciones para los entornos simplificados, evitando privilegios excesivos para los pods.
+
+- **TLS público**: `k8s/security/api-gateway-ingress.yaml` provee un Ingress con terminación TLS. Generá (o importa) un certificado y crea el secret `api-gateway-tls` en el namespace `ecommerce`:
+
+    ```bash
+    openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+        -keyout api-gateway.key -out api-gateway.crt \
+        -subj "/CN=api.ecommerce.local/O=Ecommerce"
+    kubectl -n ecommerce create secret tls api-gateway-tls \
+        --cert=api-gateway.crt --key=api-gateway.key
+    kubectl apply -f k8s/security/api-gateway-ingress.yaml
+    ```
+
+    Para producción reemplaza `api.ecommerce.local` por tu dominio real y usa un certificado emitido por una CA válida (por ejemplo, Let’s Encrypt mediante `cert-manager`). El Service `api-gateway` puede seguir exponiéndose por NodePort para pruebas internas; el Ingress agrega la capa TLS para el tráfico público.
+
 
 ### System Boundary *Architecture* - μServices Landscape
 
@@ -525,6 +693,8 @@ This will result in the following response:
 }
 ```
 ### Testing Them All
+
+#### E2E Tests
 Now it's time to test all the application functionality as one part. To do so just run
  the following automation test script:
 
@@ -535,6 +705,67 @@ selim@:~/ecommerce-microservice-backend-app$ ./test-em-all.sh start
 >1. start docker, 
 >2. run the tests, 
 >3. stop the docker instances.
+
+#### Performance Tests with Locust
+
+Performance tests simulate concurrent users to measure throughput, response times, and error rates. We use [Locust](https://locust.io/) for load testing.
+
+**Prerequisites:**
+```bash
+# Install Locust
+pip install -r requirements-performance.txt
+
+# Or directly
+pip install locust
+```
+
+**Running Performance Tests:**
+
+1. **Local execution** (with port-forward):
+```bash
+# Terminal 1: Port-forward API Gateway
+kubectl port-forward -n ecommerce svc/api-gateway 8080:8080
+
+# Terminal 2: Run tests
+./run-performance-tests.sh local 100 3m
+
+# Or manually
+locust -f locustfile.py --host=http://localhost:8080 \
+       --users 100 --spawn-rate 10 --run-time 3m \
+       --headless --html reports/performance-report.html
+```
+
+2. **Kubernetes execution** (in-cluster):
+```bash
+./run-performance-tests.sh k8s 100 3m
+```
+
+3. **Interactive Web UI** (for manual testing):
+```bash
+# Port-forward API Gateway
+kubectl port-forward -n ecommerce svc/api-gateway 8080:8080
+
+# Start Locust Web UI
+locust -f locustfile.py --host=http://localhost:8080
+
+# Open browser at http://localhost:8089
+```
+
+**Tests Implemented:**
+- **ReadHeavyUser** (70%): Browse products, view details, view orders
+- **WriteHeavyUser** (30%): Create orders, add favourites, create payments
+- **RealisticUserJourney** (20%): Complete shopping flow
+
+**Expected Results:**
+- **Throughput**: > 50 RPS with 100 users
+- **Response Time**: < 200ms (GET), < 500ms (POST)
+- **Error Rate**: < 1%
+
+**Reports:**
+- HTML: `reports/performance-report.html`
+- CSV: `reports/performance_stats.csv`
+
+For detailed documentation, see [PERFORMANCE-TESTS.md](PERFORMANCE-TESTS.md)
 
 The result will look like this:
 
